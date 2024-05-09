@@ -1,0 +1,3 @@
+[submodule "Shared_OEPL_Definitions"]
+	path = shared
+	url = git@github.com:OpenEPaperLink/Shared_OEPL_Definitions.git
