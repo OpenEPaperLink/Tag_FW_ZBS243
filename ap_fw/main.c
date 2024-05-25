@@ -27,7 +27,7 @@
 #include "emulateTag.h"
 #endif
 
-#define MAX_PENDING_MACS 50
+#define MAX_PENDING_MACS 20
 #define HOUSEKEEPING_INTERVAL 60UL
 
 struct pendingData __xdata pendingDataArr[MAX_PENDING_MACS];
