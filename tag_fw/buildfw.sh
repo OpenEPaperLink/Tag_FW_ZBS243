@@ -16,11 +16,9 @@ zbs29_BW_uc
 zbs29_ssd1619
 zbs29_uc8151
 zbs42_ssd1619
+zbs42_ucvar
 zbs_nodisplay
 zbs_segmented_uk
-
-
-
 
 echo -e "\nBuilding 1.54 version..."
 make BUILD=zbs154_ssd1619 CPU=8051 SOC=zbs243 > /dev/null
@@ -57,7 +55,12 @@ make BUILD=zbs29_BW_uc CPU=8051 SOC=zbs243 > /dev/null
 mv main.bin ${BINDIR}/SOL_M2_29_LTUC_${VER}.bin -v
 make clean > /dev/null
 
-echo -e "\n\nBuilding 4.2 version..."
+echo -e "\n\nBuilding 4.2-ssd version..."
 make BUILD=zbs42_ssd1619 CPU=8051 SOC=zbs243 > /dev/null
 mv main.bin ${BINDIR}/SOL_M2_42_SSD_${VER}.bin -v
+make clean > /dev/null
+
+echo -e "\n\nBuilding 4.2-uc version..."
+make BUILD=zbs42_ucvar CPU=8051 SOC=zbs243 > /dev/null
+mv main.bin ${BINDIR}/SOL_M2_42_UC_${VER}.bin -v
 make clean > /dev/null

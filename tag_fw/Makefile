@@ -1,5 +1,5 @@
 
-BUILD		?= zbs29_ssd1619
+BUILD		?= zbs42_ucvar
 
 #file containing main() must be first!
 SOURCES		+= main.c eeprom.c drawing.c
@@ -7,8 +7,6 @@ SOURCES		+= main.c eeprom.c drawing.c
 SOURCES		+= comms.c
 SOURCES		+= syncedproto.c userinterface.c
 SOURCES		+= powermgt.c barcode.c i2cdevices.c settings.c
-
-
 
 all:	#make sure it is the first target
 
@@ -28,11 +26,11 @@ SOURCES += md5.c
 
 EEPROMDRV ?= eeprom.c
 
-
-
 SOURCES += $(EEPROMDRV)
-FLAGS += -I.
 
+#FLAGS += --code-loc 0x400 -DSTOCKFWOPTIONS
+
+FLAGS += -I.
 
 OBJS = $(patsubst %.c,%.$(OBJFILEEXT),$(SOURCES))
 
@@ -60,6 +58,7 @@ SOURCES += board/zbs154_ssd1619/screen.c
 SOURCES += board/zbs16_ssd1619/screen.c
 SOURCES += board/zbs29_uc8151/screen.c
 SOURCES += board/zbs27_ucvar/screen.c
+SOURCES += board/zbs42_ucvar/screen.c
 
 
 clean:

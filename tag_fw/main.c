@@ -30,7 +30,14 @@
 
 // #define DEBUG_MODE
 
-static const uint64_t __code __at(0x008b) firmwaremagic = (0xdeadd0d0beefcafeull) + HW_TYPE;
+
+#ifdef STOCKFWOPTIONS
+#define FWMAGICOFFSET 0x048b
+#else 
+#define FWMAGICOFFSET 0x008b
+#endif
+
+static const uint64_t __code __at(FWMAGICOFFSET) firmwaremagic = (0xdeadd0d0beefcafeull) + HW_TYPE;
 
 #define TAG_MODE_CHANSEARCH 0
 #define TAG_MODE_ASSOCIATED 1
@@ -137,6 +144,12 @@ void writeInfoPageWithMac() {
     settemp[1] = 0x2D;
     settemp[0] = 0x10;
 #endif
+#if (HW_TYPE == SOLUM_42_UCVAR)
+    settemp[1] = 0x41;
+    settemp[0] = 0x10;
+#endif
+
+
     uint8_t cksum = 0;
     for (uint8_t c = 0; c < 8; c++) {
         cksum ^= settemp[c];
