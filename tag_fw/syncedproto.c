@@ -19,54 +19,54 @@
 #include "../shared/oepl-definitions.h"
 #include "../shared/oepl-proto.h"
 #include "radio.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "settings.h"
 #include "sleep.h"
 #include "timer.h"
-#include "userinterface.h"
+#include "uicommon.h"
 #include "wdt.h"
 #include "uart.h"
 #include "md5.h"
 #include "flash.h"
 
 // download-stuff
-uint8_t __xdata blockbuffer[BLOCK_XFER_BUFFER_SIZE] = {0};
-static struct blockRequest __xdata curBlock = {0};  // used by the block-requester, contains the next request that we'll send
-static uint8_t __xdata curDispDataVer[8] = {0};
-static struct AvailDataInfo __xdata xferDataInfo = {0};  // holds the AvailDataInfo during the transfer
-static bool __xdata requestPartialBlock = false;         // if we should ask the AP to get this block from the host or not
+__xdata uint8_t blockbuffer[BLOCK_XFER_BUFFER_SIZE] = {0};
+static __xdata struct blockRequest curBlock = {0};  // used by the block-requester, contains the next request that we'll send
+static __xdata uint8_t curDispDataVer[8] = {0};
+static __xdata struct AvailDataInfo xferDataInfo = {0};  // holds the AvailDataInfo during the transfer
+static __xdata bool requestPartialBlock = false;         // if we should ask the AP to get this block from the host or not
 #define BLOCK_TRANSFER_ATTEMPTS 5
 
 static uint8_t xferImgSlot = 0xFF;          // holds current transfer slot in progress
 uint8_t __xdata curImgSlot = 0xFF;          // currently shown image
-static uint32_t __xdata curHighSlotId = 0;  // current highest ID, will be incremented before getting written to a new slot
-static uint8_t __xdata nextImgSlot = 0;     // next slot in sequence for writing
-static uint8_t __xdata imgSlots = 0;
-static uint32_t __xdata eeSize = 0;
+static __xdata uint32_t curHighSlotId = 0;  // current highest ID, will be incremented before getting written to a new slot
+static __xdata uint8_t nextImgSlot = 0;     // next slot in sequence for writing
+static __xdata uint8_t imgSlots = 0;
+static __xdata uint32_t eeSize = 0;
 #define OTA_UPDATE_SIZE 0x10000
 
 // stuff we need to keep track of related to the network/AP
-uint8_t __xdata APmac[8] = {0};
-uint16_t __xdata APsrcPan = 0;
-uint8_t __xdata mSelfMac[8] = {0};
-static uint8_t __xdata seq = 0;
-uint8_t __xdata currentChannel = 0;
+__xdata uint8_t APmac[8] = {0};
+__xdata uint16_t APsrcPan = 0;
+__xdata uint8_t mSelfMac[8] = {0};
+static __xdata uint8_t seq = 0;
+__xdata uint8_t currentChannel = 0;
 
 // buffer we use to prepare/read packets
-static uint8_t __xdata inBuffer[128] = {0};
-static uint8_t __xdata outBuffer[128] = {0};
+static __xdata uint8_t inBuffer[128] = {0};
+static __xdata uint8_t outBuffer[128] = {0};
 
 // determines if the tagAssociated loop in main.c performs a rapid next checkin
-bool __xdata fastNextCheckin = false;
+__xdata bool fastNextCheckin = false;
 
 // other stuff we shouldn't have to put here...
-static uint32_t __xdata markerValid = EEPROM_IMG_VALID;
+static __xdata uint32_t markerValid = EEPROM_IMG_VALID;
 
 extern void executeCommand(uint8_t cmd);  // this is defined in main.c
 
 // tools
-static uint8_t __xdata getPacketType(const void *__xdata buffer) {
-    const struct MacFcs *__xdata fcs = buffer;
+static __xdata uint8_t getPacketType(const __xdata void *buffer) {
+    const __xdata struct MacFcs *fcs = buffer;
     if ((fcs->frameType == 1) && (fcs->destAddrType == 2) && (fcs->srcAddrType == 3) && (fcs->panIdCompressed == 0)) {
         // broadcast frame
         uint8_t __xdata type = ((uint8_t *)buffer)[sizeof(struct MacFrameBcast)];
@@ -78,8 +78,8 @@ static uint8_t __xdata getPacketType(const void *__xdata buffer) {
     }
     return 0;
 }
-static bool pktIsUnicast(const void *__xdata buffer) {
-    const struct MacFcs *__xdata fcs = buffer;
+static bool pktIsUnicast(const __xdata void *buffer) {
+    const __xdata struct MacFcs *fcs = buffer;
     if ((fcs->frameType == 1) && (fcs->destAddrType == 2) && (fcs->srcAddrType == 3) && (fcs->panIdCompressed == 0)) {
         return false;
     } else if ((fcs->frameType == 1) && (fcs->destAddrType == 3) && (fcs->srcAddrType == 3) && (fcs->panIdCompressed == 1)) {
@@ -89,7 +89,7 @@ static bool pktIsUnicast(const void *__xdata buffer) {
     // unknown type...
     return false;
 }
-void dump(const uint8_t *__xdata a, const uint16_t __xdata l) {
+void dump(const __xdata uint8_t *a, const __xdata uint16_t l) {
     pr("\n        ");
 #define ROWS 16
     for (uint8_t c = 0; c < ROWS; c++) {
@@ -111,7 +111,7 @@ void dump(const uint8_t *__xdata a, const uint16_t __xdata l) {
     }
     pr("\n");
 }
-bool checkCRC(const void *p, const uint8_t len) {
+bool checkCRC(const __xdata void *p, const uint8_t len) {
     uint8_t total = 0;
     for (uint8_t c = 1; c < len; c++) {
         total += ((uint8_t *)p)[c];
@@ -119,7 +119,7 @@ bool checkCRC(const void *p, const uint8_t len) {
     // pr("CRC: rx %d, calc %d\n", ((uint8_t *)p)[0], total);
     return ((uint8_t *)p)[0] == total;
 }
-static void addCRC(void *p, const uint8_t len) {
+static void addCRC(__xdata void *p, const uint8_t len) {
     uint8_t total = 0;
     for (uint8_t c = 1; c < len; c++) {
         total += ((uint8_t *)p)[c];
@@ -175,7 +175,7 @@ uint8_t detectAP(const uint8_t channel) __reentrant {
 
 // data xfer stuff
 static void sendShortAvailDataReq() {
-    struct MacFrameBcast __xdata *txframe = (struct MacFrameBcast *)(outBuffer + 1);
+    __xdata struct MacFrameBcast *txframe = (struct MacFrameBcast *)(outBuffer + 1);
     outBuffer[0] = sizeof(struct MacFrameBcast) + 1 + 2;
     outBuffer[sizeof(struct MacFrameBcast) + 1] = PKT_AVAIL_DATA_SHORTREQ;
     memcpy(txframe->src, mSelfMac, 8);
@@ -188,9 +188,9 @@ static void sendShortAvailDataReq() {
     commsTxNoCpy(outBuffer);
 }
 static void sendAvailDataReq() {
-    struct MacFrameBcast __xdata *txframe = (struct MacFrameBcast *)(outBuffer + 1);
+    __xdata struct MacFrameBcast *txframe = (__xdata struct MacFrameBcast *)(outBuffer + 1);
     memset(outBuffer, 0, sizeof(struct MacFrameBcast) + sizeof(struct AvailDataReq) + 2 + 4);
-    struct AvailDataReq *__xdata availreq = (struct AvailDataReq *)(outBuffer + 2 + sizeof(struct MacFrameBcast));
+    __xdata struct AvailDataReq *availreq = (__xdata struct AvailDataReq *)(outBuffer + 2 + sizeof(struct MacFrameBcast));
     outBuffer[0] = sizeof(struct MacFrameBcast) + sizeof(struct AvailDataReq) + 2 + 2;
     outBuffer[sizeof(struct MacFrameBcast) + 1] = PKT_AVAIL_DATA_REQ;
     memcpy(txframe->src, mSelfMac, 8);
@@ -216,21 +216,21 @@ static void sendAvailDataReq() {
     addCRC(availreq, sizeof(struct AvailDataReq));
     commsTxNoCpy(outBuffer);
 }
-struct AvailDataInfo *__xdata getAvailDataInfo() {
+__xdata struct AvailDataInfo *getAvailDataInfo() {
 #ifdef DEBUGPROTO
     pr("PROTO: Full AvailData\n");
 #endif
     radioRxEnable(true, true);
-    uint32_t __xdata t;
+    __xdata uint32_t t;
     for (uint8_t c = 0; c < DATA_REQ_MAX_ATTEMPTS; c++) {
         sendAvailDataReq();
         t = timerGet() + (TIMER_TICKS_PER_MS * DATA_REQ_RX_WINDOW_SIZE);
         while (timerGet() < t) {
-            int8_t __xdata ret = commsRxUnencrypted(inBuffer);
+            __xdata int8_t ret = commsRxUnencrypted(inBuffer);
             if (ret > 1) {
                 if (getPacketType(inBuffer) == PKT_AVAIL_DATA_INFO) {
                     if (checkCRC(inBuffer + sizeof(struct MacFrameNormal) + 1, sizeof(struct AvailDataInfo))) {
-                        struct MacFrameNormal *__xdata f = (struct MacFrameNormal *)inBuffer;
+                        __xdata struct MacFrameNormal *f = (struct MacFrameNormal *)inBuffer;
                         memcpy(APmac, f->src, 8);
                         APsrcPan = f->pan;
                         dataReqLastAttempt = c;
@@ -243,12 +243,12 @@ struct AvailDataInfo *__xdata getAvailDataInfo() {
     dataReqLastAttempt = DATA_REQ_MAX_ATTEMPTS;
     return NULL;
 }
-struct AvailDataInfo *__xdata getShortAvailDataInfo() {
+__xdata struct AvailDataInfo *getShortAvailDataInfo() {
 #ifdef DEBUGPROTO
     pr("PROTO: Short AvailData\n");
 #endif
     radioRxEnable(true, true);
-    uint32_t __xdata t;
+    __xdata uint32_t t;
     for (uint8_t c = 0; c < DATA_REQ_MAX_ATTEMPTS; c++) {
         sendShortAvailDataReq();
         // sendAvailDataReq();
@@ -258,7 +258,7 @@ struct AvailDataInfo *__xdata getShortAvailDataInfo() {
             if (ret > 1) {
                 if (getPacketType(inBuffer) == PKT_AVAIL_DATA_INFO) {
                     if (checkCRC(inBuffer + sizeof(struct MacFrameNormal) + 1, sizeof(struct AvailDataInfo))) {
-                        struct MacFrameNormal *__xdata f = (struct MacFrameNormal *)inBuffer;
+                        __xdata struct MacFrameNormal *f = (__xdata struct MacFrameNormal *)inBuffer;
                         memcpy(APmac, f->src, 8);
                         APsrcPan = f->pan;
                         dataReqLastAttempt = c;
@@ -315,7 +315,7 @@ bool sendTagReturnData(uint8_t __xdata *data, uint8_t len, uint8_t type) {
 }
 #endif
 
-static bool processBlockPart(const struct blockPart *bp) {
+static bool processBlockPart(const __xdata struct blockPart *bp) {
     uint16_t __xdata start = bp->blockPart * BLOCK_PART_DATA_SIZE;
     uint16_t __xdata size = BLOCK_PART_DATA_SIZE;
     // validate if it's okay to copy data
@@ -344,10 +344,10 @@ static bool blockRxLoop(const uint32_t timeout) {
     radioRxEnable(true, true);
     t = timerGet() + (TIMER_TICKS_PER_MS * (timeout + 20));
     while (timerGet() < t) {
-        int8_t __xdata ret = commsRxUnencrypted(inBuffer);
+        __xdata int8_t ret = commsRxUnencrypted(inBuffer);
         if (ret > 1) {
             if (getPacketType(inBuffer) == PKT_BLOCK_PART) {
-                struct blockPart *bp = (struct blockPart *)(inBuffer + sizeof(struct MacFrameNormal) + 1);
+                __xdata struct blockPart *bp = (struct blockPart *)(inBuffer + sizeof(struct MacFrameNormal) + 1);
                 success = processBlockPart(bp);
             }
         }
@@ -356,15 +356,15 @@ static bool blockRxLoop(const uint32_t timeout) {
     radioRxFlush();
     return success;
 }
-static struct blockRequestAck *__xdata continueToRX() {
-    struct blockRequestAck *ack = (struct blockRequestAck *)(inBuffer + sizeof(struct MacFrameNormal) + 1);
+static __xdata struct blockRequestAck *continueToRX() {
+    __xdata struct blockRequestAck *ack = (struct blockRequestAck *)(inBuffer + sizeof(struct MacFrameNormal) + 1);
     ack->pleaseWaitMs = 0;
     return ack;
 }
-static void sendBlockRequest() {
+static __xdata void sendBlockRequest() {
     memset(outBuffer, 0, sizeof(struct MacFrameNormal) + sizeof(struct blockRequest) + 2 + 2);
-    struct MacFrameNormal *__xdata f = (struct MacFrameNormal *)(outBuffer + 1);
-    struct blockRequest *__xdata blockreq = (struct blockRequest *)(outBuffer + 2 + sizeof(struct MacFrameNormal));
+    __xdata struct MacFrameNormal *f = (struct MacFrameNormal *)(outBuffer + 1);
+    __xdata struct blockRequest *blockreq = (struct blockRequest *)(outBuffer + 2 + sizeof(struct MacFrameNormal));
     outBuffer[0] = sizeof(struct MacFrameNormal) + sizeof(struct blockRequest) + 2 + 2;
     if (requestPartialBlock) {
         ;
@@ -388,15 +388,15 @@ static void sendBlockRequest() {
     addCRC(blockreq, sizeof(struct blockRequest));
     commsTxNoCpy(outBuffer);
 }
-static struct blockRequestAck *__xdata performBlockRequest() __reentrant {
-    static uint32_t __xdata t;
+static __xdata struct blockRequestAck *performBlockRequest() __reentrant {
+    static __xdata uint32_t t;
     radioRxEnable(true, true);
     radioRxFlush();
     for (uint8_t c = 0; c < 30; c++) {
         sendBlockRequest();
         t = timerGet() + (TIMER_TICKS_PER_MS * (7UL + c / 10));
         do {
-            static int8_t __xdata ret;
+            static __xdata int8_t ret;
             ret = commsRxUnencrypted(inBuffer);
             if (ret > 1) {
                 switch (getPacketType(inBuffer)) {
@@ -427,7 +427,7 @@ static struct blockRequestAck *__xdata performBlockRequest() __reentrant {
 }
 static void sendXferCompletePacket() {
     memset(outBuffer, 0, sizeof(struct MacFrameNormal) + 2 + 4);
-    struct MacFrameNormal *__xdata f = (struct MacFrameNormal *)(outBuffer + 1);
+    __xdata struct MacFrameNormal *f = (struct MacFrameNormal *)(outBuffer + 1);
     outBuffer[0] = sizeof(struct MacFrameNormal) + 2 + 2;
     outBuffer[sizeof(struct MacFrameNormal) + 1] = PKT_XFER_COMPLETE;
     memcpy(f->src, mSelfMac, 8);
@@ -444,14 +444,14 @@ static void sendXferCompletePacket() {
     f->seq = seq++;
     commsTxNoCpy(outBuffer);
 }
-static void sendXferComplete() {
+static void sendXferComplete() __reentrant {
     radioRxEnable(true, true);
 
     for (uint8_t c = 0; c < 16; c++) {
         sendXferCompletePacket();
-        uint32_t __xdata start = timerGet();
+        int32_t start = timerGet();
         while ((timerGet() - start) < (TIMER_TICKS_PER_MS * 6UL)) {
-            int8_t __xdata ret = commsRxUnencrypted(inBuffer);
+            int8_t ret = commsRxUnencrypted(inBuffer);
             if (ret > 1) {
                 if (getPacketType(inBuffer) == PKT_XFER_COMPLETE_ACK) {
 #ifdef DEBUGPROTO
@@ -488,8 +488,7 @@ static void getNumSlots() {
 #ifdef DEBUGEEPROM
         pr("EEPROM: eeprom is too small\n");
 #endif
-        while (1)
-            ;
+        while (1);
     } else if (nSlots >> 8) {
 #ifdef DEBUGEEPROM
         pr("EEPROM: eeprom is too big, some will be unused\n");
@@ -501,7 +500,7 @@ static void getNumSlots() {
     pr("PROTO: %d image slots total\n", imgSlots);
 #endif
 }
-static uint8_t findSlotVer(const uint8_t *ver) {
+static uint8_t findSlotVer(const __xdata uint8_t *ver) {
 #ifdef DEBUGBLOCKS
     return 0xFF;
 #endif
@@ -519,7 +518,7 @@ static uint8_t findSlotVer(const uint8_t *ver) {
 }
 
 // making this reentrant saves one byte of idata...
-uint8_t __xdata findSlotDataTypeArg(uint8_t arg) __reentrant {
+__xdata uint8_t findSlotDataTypeArg(uint8_t arg) __reentrant {
     arg &= (0xF8);  // unmatch with the 'preload' bit and LUT bits
     for (uint8_t c = 0; c < imgSlots; c++) {
         struct EepromImageHeader __xdata *eih = (struct EepromImageHeader __xdata *)blockbuffer;
@@ -537,7 +536,7 @@ uint8_t getEepromImageDataArgument(const uint8_t slot) {
     eepromRead(getAddressForSlot(slot), eih, sizeof(struct EepromImageHeader));
     return eih->argument;
 }
-uint8_t __xdata findNextSlideshowImage(uint8_t start) __reentrant {
+__xdata uint8_t findNextSlideshowImage(uint8_t start) __reentrant {
     struct EepromImageHeader __xdata *eih = (struct EepromImageHeader __xdata *)blockbuffer;
     uint8_t c = start;
     while (1) {
@@ -578,8 +577,8 @@ void drawImageFromEeprom(const uint8_t imgSlot, uint8_t lut) {
 }
 static uint32_t getHighSlotId() {
     uint32_t temp = 0;
-    for (uint8_t __xdata c = 0; c < imgSlots; c++) {
-        struct EepromImageHeader __xdata *eih = (struct EepromImageHeader __xdata *)blockbuffer;
+    for (__xdata uint8_t c = 0; c < imgSlots; c++) {
+        __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)blockbuffer;
         eepromRead(getAddressForSlot(c), eih, sizeof(struct EepromImageHeader));
         if (xMemEqual4(&eih->validMarker, &markerValid)) {
             if (temp < eih->id) {
@@ -595,8 +594,8 @@ static uint32_t getHighSlotId() {
 }
 
 // data transfer stuff
-static uint8_t __xdata partsThisBlock = 0;
-static uint8_t __xdata blockAttempts = 0;  // these CAN be local to the function, but for some reason, they won't survive sleep?
+__xdata static uint8_t partsThisBlock = 0;
+__xdata static uint8_t blockAttempts = 0;  // these CAN be local to the function, but for some reason, they won't survive sleep?
                                            // they get overwritten with  7F 32 44 20 00 00 00 00 11, I don't know why.
 
 static bool getDataBlock(const uint16_t blockSize) {
@@ -701,9 +700,9 @@ static bool getDataBlock(const uint16_t blockSize) {
     return false;
 }
 
-uint16_t __xdata dataRequestSize = 0;
-uint16_t __xdata otaSize = 0;
-static bool downloadFWUpdate(const struct AvailDataInfo *__xdata avail) {
+__xdata uint16_t dataRequestSize = 0;
+__xdata uint16_t otaSize = 0;
+static bool downloadFWUpdate(const __xdata struct AvailDataInfo *avail) {
     // check if we already started the transfer of this information & haven't completed it
     if (xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8) && xferDataInfo.dataSize) {
         // looks like we did. We'll carry on where we left off.
@@ -760,10 +759,10 @@ static bool downloadFWUpdate(const struct AvailDataInfo *__xdata avail) {
     return true;
 }
 
-uint16_t __xdata imageSize = 0;
-static bool downloadImageDataToEEPROM(const struct AvailDataInfo *__xdata avail) {
+__xdata uint16_t imageSize = 0;
+static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail) {
     //  check if we already started the transfer of this information & haven't completed it
-    if (xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8) &&
+    if (xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)&xferDataInfo.dataVer, 8) &&
         (xferDataInfo.dataTypeArgument == avail->dataTypeArgument) &&
         xferDataInfo.dataSize) {
 // looks like we did. We'll carry on where we left off.
@@ -792,7 +791,7 @@ static bool downloadImageDataToEEPROM(const struct AvailDataInfo *__xdata avail)
 #endif
                 return true;
             }
-            struct EepromImageHeader __xdata *eih = (struct EepromImageHeader __xdata *)blockbuffer;
+            __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)blockbuffer;
             eepromRead(getAddressForSlot(nextImgSlot), eih, sizeof(struct EepromImageHeader));
             // check if the marker is indeed valid
             if (xMemEqual4(&eih->validMarker, &markerValid)) {
@@ -807,7 +806,7 @@ static bool downloadImageDataToEEPROM(const struct AvailDataInfo *__xdata avail)
 
         xferImgSlot = nextImgSlot;
 
-        uint8_t __xdata attempt = 5;
+        __xdata uint8_t attempt = 5;
         while (attempt--) {
             if (eepromErase(getAddressForSlot(xferImgSlot), EEPROM_IMG_EACH / EEPROM_ERZ_SECTOR_SZ)) goto eraseSuccess;
         }
@@ -870,7 +869,7 @@ static bool downloadImageDataToEEPROM(const struct AvailDataInfo *__xdata avail)
     }
 #endif
     // borrow the blockbuffer temporarily
-    struct EepromImageHeader __xdata *eih = (struct EepromImageHeader __xdata *)blockbuffer;
+    __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)blockbuffer;
     xMemCopy8(&eih->version, &xferDataInfo.dataVer);
     eih->validMarker = EEPROM_IMG_VALID;
     eih->id = ++curHighSlotId;
@@ -887,8 +886,8 @@ static bool downloadImageDataToEEPROM(const struct AvailDataInfo *__xdata avail)
     return true;
 }
 
-struct imageDataTypeArgStruct __xdata arg = {0};  // this is related to the function below, but if declared -inside- the function, it gets cleared during sleep...
-inline bool processImageDataAvail(struct AvailDataInfo *__xdata avail) {
+__xdata struct imageDataTypeArgStruct arg = {0};  // this is related to the function below, but if declared -inside- the function, it gets cleared during sleep...
+inline bool processImageDataAvail(__xdata struct AvailDataInfo *avail) {
     *((uint8_t *)arg) = avail->dataTypeArgument;
     if (arg.preloadImage) {
 #ifdef DEBUGPROTO
@@ -936,7 +935,7 @@ inline bool processImageDataAvail(struct AvailDataInfo *__xdata avail) {
 
     } else {
         // check if we're currently displaying this data payload
-        if (xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata)curDispDataVer, 8)) {
+        if (xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)curDispDataVer, 8)) {
             // currently displayed, not doing anything except for sending an XFC
 #ifdef DEBUGPROTO
             pr("PROTO: currently shown image, send xfc\n");
@@ -1006,7 +1005,7 @@ inline bool processImageDataAvail(struct AvailDataInfo *__xdata avail) {
     }
 }
 
-bool processAvailDataInfo(struct AvailDataInfo *__xdata avail) {
+bool processAvailDataInfo(__xdata struct AvailDataInfo *avail) __reentrant {
     switch (avail->dataType) {
         case DATATYPE_IMG_BMP:
         case DATATYPE_IMG_DIFF:
@@ -1066,14 +1065,14 @@ bool processAvailDataInfo(struct AvailDataInfo *__xdata avail) {
                 return true;
             }
 #ifndef LEAN_VERSION
-#ifdef DEBUGPROTO
+    #ifdef DEBUGPROTO
             pr("NFC URL received\n");
-#endif
-            if (xferDataInfo.dataSize == 0 && xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8)) {
+    #endif
+            if (xferDataInfo.dataSize == 0 && xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)&xferDataInfo.dataVer, 8)) {
                 // we've already downloaded this NFC data, disregard and send XFC
-#ifdef DEBUGPROTO
+    #ifdef DEBUGPROTO
                 pr("this was the same as the last transfer, disregard\n");
-#endif
+    #endif
                 powerUp(INIT_RADIO);
                 sendXferComplete();
                 powerDown(INIT_RADIO);
@@ -1083,7 +1082,7 @@ bool processAvailDataInfo(struct AvailDataInfo *__xdata avail) {
             xMemCopy8(&(curBlock.ver), &(avail->dataVer));
             curBlock.type = avail->dataType;
             xMemCopyShort(&xferDataInfo, (void *)avail, sizeof(struct AvailDataInfo));
-            uint16_t __xdata nfcsize = avail->dataSize;
+            uint16_t nfcsize = avail->dataSize;
             wdt10s();
             if (getDataBlock(avail->dataSize)) {
                 xferDataInfo.dataSize = 0;  // mark as transfer not pending
@@ -1107,7 +1106,7 @@ bool processAvailDataInfo(struct AvailDataInfo *__xdata avail) {
             break;
 
         case DATATYPE_TAG_CONFIG_DATA:
-            if (xferDataInfo.dataSize == 0 && xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8)) {
+            if (xferDataInfo.dataSize == 0 && xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)&xferDataInfo.dataVer, 8)) {
 #ifdef DEBUGPROTO
                 pr("PROTO: this was the same as the last transfer, disregard\n");
 #endif
@@ -1155,13 +1154,13 @@ bool processAvailDataInfo(struct AvailDataInfo *__xdata avail) {
                 return true;
             }
 #ifdef EPD_SSD1619
-#ifdef DEBUGPROTO
+    #ifdef DEBUGPROTO
             pr("PROTO: OTA LUT received\n");
-#endif
-            if (xferDataInfo.dataSize == 0 && xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8)) {
-#ifdef DEBUGPROTO
+    #endif
+            if (xferDataInfo.dataSize == 0 && xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)&xferDataInfo.dataVer, 8)) {
+    #ifdef DEBUGPROTO
                 pr("PROTO: this was the same as the last transfer, disregard\n");
-#endif
+    #endif
                 powerUp(INIT_RADIO);
                 sendXferComplete();
                 powerDown(INIT_RADIO);
@@ -1187,7 +1186,7 @@ bool processAvailDataInfo(struct AvailDataInfo *__xdata avail) {
     return true;
 }
 
-bool validateMD5(uint32_t __xdata addr, uint16_t __xdata len) {
+bool validateMD5(__xdata uint32_t addr, __xdata uint16_t len) {
     md5Init();
     while (len) {
         eepromRead(addr, blockbuffer, 256);
@@ -1201,7 +1200,7 @@ bool validateMD5(uint32_t __xdata addr, uint16_t __xdata len) {
         }
     }
     md5Finalize();
-    if (xMemEqual((const void *__xdata)ctxdigest, (const void *__xdata) & xferDataInfo.dataVer, 8)) {
+    if (xMemEqual((const __xdata void *)ctxdigest, (const __xdata void *)&xferDataInfo.dataVer, 8)) {
 #ifdef DEBUGPROTO
         pr("PROTO: MD5 pass!\n");
 #endif
@@ -1217,7 +1216,7 @@ bool validateMD5(uint32_t __xdata addr, uint16_t __xdata len) {
 bool validateFWMagic() {
     flashRead(0x8b, (void *)(blockbuffer + 1024), 256);
     eepromRead(eeSize - OTA_UPDATE_SIZE, blockbuffer, 256);
-    if (xMemEqual((const void *__xdata)(blockbuffer + 1024), (const void *__xdata)(blockbuffer + 0x8b), 8)) {
+    if (xMemEqual((const __xdata void *)(blockbuffer + 1024), (const __xdata void *)(blockbuffer + 0x8b), 8)) {
 #ifdef DEBUGOTA
         pr("OTA: magic number matches! good fw\n");
 #endif

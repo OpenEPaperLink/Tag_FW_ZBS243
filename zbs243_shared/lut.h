@@ -1,6 +1,6 @@
 #define __packed
 
-#include "screen.h"
+#include "tagtype.h"
 
 #define LUTGROUP_NEGATIVE           0
 #define LUTGROUP_FASTBLINK          1

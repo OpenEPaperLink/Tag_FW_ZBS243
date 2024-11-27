@@ -3,15 +3,13 @@
 #include <stdbool.h>
 
 #include "asmUtil.h"
-#include "board.h"
 #include "cpu.h"
 #include "eeprom.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "printf.h"
 #include "../shared/oepl-definitions.h"
-#include "screen.h"
 #include "timer.h"
-#include "userinterface.h"  // for addIcons
+#include "uicommon.h"  // for addIcons
 #include <stdlib.h>
 
 uint8_t __xdata* drawBuffer;

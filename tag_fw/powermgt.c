@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "asmUtil.h"
-#include "board.h"
+#include "tagtype.h"
 #include "comms.h"
 #include "cpu.h"
 #include "drawing.h"
@@ -18,13 +18,12 @@
 #include "../shared/oepl-definitions.h"
 #include "../shared/oepl-proto.h"
 #include "radio.h"
-#include "screen.h"
 #include "settings.h"
 #include "sleep.h"
 #include "syncedproto.h"
 #include "timer.h"
 #include "uart.h"  // for initUart
-#include "userinterface.h"
+//#include "uicommon.h"
 #include "wdt.h"
 
 uint16_t __xdata dataReqAttemptArr[POWER_SAVING_SMOOTHING] = {0};  // Holds the amount of attempts required per data_req/check-in

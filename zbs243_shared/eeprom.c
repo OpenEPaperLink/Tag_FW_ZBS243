@@ -1,8 +1,7 @@
 #include "asmUtil.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "eeprom.h"
 #include "printf.h"
-#include "board.h"
 #include "cpu.h"
 #include <stdlib.h>
 #include "settings.h"
@@ -95,9 +94,9 @@ static void eepromPrvSfdpRead(uint16_t ofst, uint8_t __xdata *dst, uint8_t len) 
 }
 
 __bit eepromInit(void) {
-    uint8_t __xdata buf[8];
+    uint8_t buf[8];
     uint8_t i, nParamHdrs;
-    uint8_t __xdata *tempBufferE = malloc(320);
+    __xdata uint8_t *tempBufferE = malloc(320);
 
     eepromPrvWakeFromPowerdown();
 
@@ -105,9 +104,9 @@ __bit eepromInit(void) {
 
     eepromPrvSfdpRead(0, buf, 8);
     if (buf[0] != 0x53 || buf[1] != 0x46 || buf[2] != 0x44 || buf[3] != 0x50 || buf[7] != 0xff) {
-        #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
         pr("SFDP: header not found\n");
-        #endif
+#endif
         __bit valid = false;
 
         // try manual ID for chips we know of
@@ -138,7 +137,7 @@ __bit eepromInit(void) {
                 valid = true;
                 mOpcodeErz4K = 0x20;
                 switch (eepromByte(0)) {
-                    case 0x13: // W25Q80DV without SFDP
+                    case 0x13:  // W25Q80DV without SFDP
                         mEepromSize = 0x00080000ul;
                         break;
                     default:
@@ -151,9 +150,9 @@ __bit eepromInit(void) {
         return valid;
     }
     if (buf[5] != 0x01) {
-        #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
         pr("SFDP: version wrong: %u.%d\n", buf[5], buf[4]);
-        #endif
+#endif
         return false;
     }
     nParamHdrs = buf[6];
@@ -162,42 +161,42 @@ __bit eepromInit(void) {
 
     // now we need to find the JEDEC parameter table header
     for (i = 0; i <= nParamHdrs; i++) {
-        eepromPrvSfdpRead(mathPrvMul8x8(i, 8) + 8, buf, 8);
+        eepromPrvSfdpRead(mathPrvMul8x8(i, 8) + 8, (__xdata uint8_t*)buf, 8);
         if (buf[0] == 0x00 && buf[2] == 0x01 && buf[3] >= 9) {
             uint8_t j;
 
             eepromPrvSfdpRead(*(uint16_t __xdata *)(buf + 4), tempBufferE, 9 * 4);
             if ((tempBufferE[0] & 3) != 1) {
-                #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
                 pr("SFDP: no 4K ERZ\n");
-                #endif
+#endif
                 break;
             }
             if (!(tempBufferE[0] & 0x04)) {
-                #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
                 pr("SFDP: no large write buf\n");
-                #endif
+#endif
                 break;
             }
             if ((tempBufferE[2] & 0x06)) {
-                #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
                 pr("SFDP: addr.len != 3\n");
-                #endif
+#endif
                 break;
             }
 
             if (!tempBufferE[1] || tempBufferE[1] == 0xff) {
-                #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
                 pr("SFDP: 4K ERZ opcode invalid\n");
-                #endif
+#endif
                 break;
             }
             mOpcodeErz4K = tempBufferE[1];
 
             if (tempBufferE[7] & 0x80) {
-                #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
                 pr("SFDP: device too big\n");
-                #endif
+#endif
                 break;
             } else {
                 uint8_t __xdata t;
@@ -209,9 +208,9 @@ __bit eepromInit(void) {
                 else if (t = tempBufferE[5])
                     mEepromSize = 0x00000020UL;
                 else {
-                    #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
                     pr("SFDP: device so small?!\n");
-                    #endif
+#endif
                     break;
                 }
 
@@ -231,9 +230,9 @@ __bit eepromInit(void) {
                 switch (tempBufferE[j]) {
                     case 0x0c:
                         if (mOpcodeErz4K != instr) {
-                            #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
                             pr("4K ERZ opcode disagreement\n");
-                            #endif
+#endif
                             return false;
                         }
                         break;
@@ -263,9 +262,9 @@ __bit eepromInit(void) {
             return true;
         }
     }
-    #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
     pr("SFDP: no JEDEC table of expected version found\n");
-    #endif
+#endif
     return false;
 }
 

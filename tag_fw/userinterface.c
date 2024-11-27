@@ -6,7 +6,6 @@
 
 #include "asmUtil.h"
 
-#include "board.h"
 #include "comms.h"
 #include "cpu.h"
 #include "font.h"
@@ -15,7 +14,7 @@
 #include "printf.h"
 #include "../shared/oepl-definitions.h"
 #include "../shared/oepl-proto.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "settings.h"
 #include "bitmaps.h"
 #include "sleep.h"

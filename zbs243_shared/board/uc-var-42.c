@@ -5,12 +5,11 @@
 
 #include "asmUtil.h"
 #include "barcode.h"
-#include "board.h"
 #include "cpu.h"
 #include "font.h"
 #include "lut.h"
 #include "printf.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "settings.h"
 #include "sleep.h"
 #include "spi.h"
@@ -523,8 +522,6 @@ void epdWaitRdy() {
 void beginFullscreenImage() {
     shortCommand(CMD_PARTIAL_OUT);
     epdDrawDirection(false);
-    // shortCommand1(CMD_DATA_ENTRY_MODE, 3);
-    // setPosXY(0, 0);
 }
 void beginWriteFramebuffer(bool color) {
     if (color == EPD_COLOR_RED) {

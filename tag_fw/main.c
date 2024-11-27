@@ -14,11 +14,11 @@
 #include "printf.h"
 
 #include "radio.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "settings.h"
 #include "syncedproto.h"
 #include "timer.h"
-#include "userinterface.h"
+#include "uicommon.h"
 #include "wdt.h"
 
 #include "flash.h"
@@ -30,11 +30,10 @@
 
 // #define DEBUG_MODE
 
-
 #ifdef STOCKFWOPTIONS
-#define FWMAGICOFFSET 0x048b
-#else 
-#define FWMAGICOFFSET 0x008b
+    #define FWMAGICOFFSET 0x048b
+#else
+    #define FWMAGICOFFSET 0x008b
 #endif
 
 static const uint64_t __code __at(FWMAGICOFFSET) firmwaremagic = (0xdeadd0d0beefcafeull) + HW_TYPE;
@@ -44,13 +43,18 @@ static const uint64_t __code __at(FWMAGICOFFSET) firmwaremagic = (0xdeadd0d0beef
 
 uint8_t currentTagMode = TAG_MODE_CHANSEARCH;
 
-uint8_t __xdata slideShowCurrentImg = 0;
-uint8_t __xdata slideShowRefreshCount = 1;
+__xdata uint8_t  slideShowCurrentImg = 0;
+__xdata uint8_t  slideShowRefreshCount = 1;
 
-extern uint8_t *__idata blockp;
-extern uint8_t __xdata blockbuffer[];
+extern __xdata uint8_t *__idata blockp;
+extern __xdata uint8_t blockbuffer[];
 
-static bool __xdata secondLongCheckIn = false;  // send another full request if the previous was a special reason
+#define HEAP_SIZE 1024
+// This firmware requires a rather large heap. This overrides SDCC's built-in heap size (1024)
+__xdata char __sdcc_heap[HEAP_SIZE];
+const unsigned int __sdcc_heap_size = HEAP_SIZE;
+
+static __xdata bool  secondLongCheckIn = false;  // send another full request if the previous was a special reason
 
 uint8_t *rebootP;
 
@@ -124,31 +128,30 @@ void writeInfoPageWithMac() {
     settemp[4] = settemp[9];
     settemp[3] = settemp[10];
     settemp[2] = settemp[11];
-#if (HW_TYPE == SOLUM_29_SSD1619)
+    #if (HW_TYPE == SOLUM_29_SSD1619)
     settemp[1] = 0x3B;
     settemp[0] = 0x10;
-#endif
-#if (HW_TYPE == SOLUM_M2_BWR_29_UC8151)
+    #endif
+    #if (HW_TYPE == SOLUM_M2_BWR_29_UC8151)
     settemp[1] = 0x3B;
     settemp[0] = 0x30;
-#endif
-#if (HW_TYPE == SOLUM_154_SSD1619)
+    #endif
+    #if (HW_TYPE == SOLUM_154_SSD1619)
     settemp[1] = 0x34;
     settemp[0] = 0x10;
-#endif
-#if (HW_TYPE == SOLUM_42_SSD1619)
+    #endif
+    #if (HW_TYPE == SOLUM_42_SSD1619)
     settemp[1] = 0x48;
     settemp[0] = 0x10;
-#endif
-#if (HW_TYPE == SOLUM_M2_BW_29_LOWTEMP)
+    #endif
+    #if (HW_TYPE == SOLUM_M2_BW_29_LOWTEMP)
     settemp[1] = 0x2D;
     settemp[0] = 0x10;
-#endif
-#if (HW_TYPE == SOLUM_42_UCVAR)
+    #endif
+    #if (HW_TYPE == SOLUM_42_UCVAR)
     settemp[1] = 0x41;
     settemp[0] = 0x10;
-#endif
-
+    #endif
 
     uint8_t cksum = 0;
     for (uint8_t c = 0; c < 8; c++) {
@@ -164,9 +167,9 @@ void writeInfoPageWithMac() {
 }
 #endif
 
-uint8_t channelSelect(uint8_t rounds) {  // returns 0 if no accesspoints were found
+uint8_t channelSelect(uint8_t rounds) __reentrant {  // returns 0 if no accesspoints were found
     powerUp(INIT_RADIO);
-    uint8_t __xdata result[16];
+    uint8_t result[16];
     memset(result, 0, sizeof(result));
 
     for (uint8_t i = 0; i < rounds; i++) {
@@ -180,8 +183,8 @@ uint8_t channelSelect(uint8_t rounds) {  // returns 0 if no accesspoints were fo
         }
     }
     powerDown(INIT_RADIO);
-    uint8_t __xdata highestLqi = 0;
-    uint8_t __xdata highestSlot = 0;
+    uint8_t highestLqi = 0;
+    uint8_t highestSlot = 0;
     for (uint8_t c = 0; c < sizeof(result); c++) {
         if (result[c] > highestLqi) {
             highestSlot = channelList[c];
@@ -195,7 +198,7 @@ uint8_t channelSelect(uint8_t rounds) {  // returns 0 if no accesspoints were fo
 
 void validateMacAddress() {
     // check if the mac contains at least some non-0xFF values
-    for (uint8_t __xdata c = 0; c < 8; c++) {
+    for (__xdata uint8_t  c = 0; c < 8; c++) {
         if (mSelfMac[c] != 0xFF) goto macIsValid;
     }
 // invalid mac address. Display warning screen and sleep forever
@@ -229,15 +232,15 @@ void checkI2C() {
         // found something!
         capabilities |= CAPABILITY_HAS_NFC;
         if (supportsNFCWake()) {
-#ifdef DEBUGNFC
+    #ifdef DEBUGNFC
             pr("NFC: NFC Wake Supported\n");
-#endif
+    #endif
             capabilities |= CAPABILITY_NFC_WAKE;
         }
     } else {
-#ifdef DEBUGNFC
+    #ifdef DEBUGNFC
         pr("I2C: No devices found");
-#endif
+    #endif
         // didn't find a NFC chip on the expected ID
         powerDown(INIT_I2C);
     }
@@ -254,8 +257,7 @@ void detectButtonOrJig() {
             // show splashscreen
             powerUp(INIT_EPD);
             afterFlashScreenSaver();
-            while (1)
-                ;
+            while (1);
             break;
         case DETECT_P1_0_NOTHING:
             break;
@@ -266,7 +268,7 @@ void detectButtonOrJig() {
 
 void TagAssociated() {
     // associated
-    struct AvailDataInfo *__xdata avail;
+    __xdata struct AvailDataInfo *avail;
     // Is there any reason why we should do a long (full) get data request (including reason, status)?
     if ((longDataReqCounter > LONG_DATAREQ_INTERVAL) || wakeUpReason != WAKEUP_REASON_TIMED || secondLongCheckIn) {
         // check if we should do a voltage measurement (those are pretty expensive)
@@ -455,8 +457,8 @@ void TagChanSearch() {
 #ifndef LEAN_VERSION
 void TagSlideShow() {
     currentChannel = 11;  // suppress the no-rf image thing
-    if(!displayCustomImage(CUSTOM_IMAGE_SPLASHSCREEN)){
-        showSplashScreen();     // show -something- during bootup if custom splash is not defined
+    if (!displayCustomImage(CUSTOM_IMAGE_SPLASHSCREEN)) {
+        showSplashScreen();  // show -something- during bootup if custom splash is not defined
     }
 
     // do a short channel search
@@ -467,7 +469,7 @@ void TagSlideShow() {
     // if we did find an AP, check in once
     if (currentChannel) {
         doVoltageReading();
-        struct AvailDataInfo *__xdata avail;
+        __xdata struct AvailDataInfo *avail;
         powerUp(INIT_RADIO);
         avail = getAvailDataInfo();
 
@@ -477,7 +479,7 @@ void TagSlideShow() {
     }
     powerDown(INIT_RADIO);
     powerUp(INIT_EEPROM);
-    writeSettings();        // entered slideshow mode, save settings to ensure the next boot is into slideshow mode
+    writeSettings();  // entered slideshow mode, save settings to ensure the next boot is into slideshow mode
     powerDown(INIT_RADIO);
 
     // suppress the no-rf image
@@ -520,16 +522,16 @@ void TagSlideShow() {
                 doSleep(1000UL * SLIDESHOW_INTERVAL_GLACIAL);
                 break;
         }
-#ifdef DEBUGMAIN
+    #ifdef DEBUGMAIN
         pr("wake...\n");
-#endif
+    #endif
     }
 }
 
 void TagShowWaitRFWake() {
-#ifdef DEBUGMAIN
+    #ifdef DEBUGMAIN
     pr("waiting for RF wake to start slideshow, now showing image\n");
-#endif
+    #endif
     currentChannel = 11;  // suppress the no-rf image thing
     displayCustomImage(CUSTOM_IMAGE_SLIDESHOW);
     // powerDown(INIT_EEPROM | INIT_EPD);
@@ -646,7 +648,7 @@ void executeCommand(uint8_t cmd) {
 void main() {
     setupPortsInitial();
     powerUp(INIT_BASE | INIT_UART);
-    pr("BOOTED> %04X%s\n",fwVersion, fwVersionSuffix);
+    pr("BOOTED> %04X%s\n", fwVersion, fwVersionSuffix);
 
 #ifdef DEBUGGUI
     displayLoop();  // remove me
@@ -740,10 +742,10 @@ void main() {
         validateMacAddress();
 
 #ifndef LEAN_VERSION
-#if (NFC_TYPE == 1)
+    #if (NFC_TYPE == 1)
         // initialize I2C
         checkI2C();
-#endif
+    #endif
 #endif
         // Get a voltage reading on the tag, loading down the battery with the radio
         doVoltageReading();

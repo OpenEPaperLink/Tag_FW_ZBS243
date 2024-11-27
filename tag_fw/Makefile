@@ -1,25 +1,29 @@
 
-BUILD		?= zbs42_ucvar
+BUILD		?= M2_ZBS_42_UCVAR_BWR
+SOC		?= zbs243
 
 #file containing main() must be first!
 SOURCES		+= main.c eeprom.c drawing.c
 #SOURCES		+= ccm.c comms.c
+SOURCES 	+= board/tagtype.c
+SOURCES		+= board/uicommon.c
 SOURCES		+= comms.c
-SOURCES		+= syncedproto.c userinterface.c
+SOURCES		+= syncedproto.c
 SOURCES		+= powermgt.c barcode.c i2cdevices.c settings.c
 
 all:	#make sure it is the first target
 
-include board/$(BUILD)/make.mk
 include soc/$(SOC)/make.mk
 include cpu/$(CPU)/make.mk
-FLAGS += -Iboard/$(BUILD)
+include board/make.mk
+
+FLAGS += -D$(BUILD)
+
+FLAGS += -Iboard/
 FLAGS += -Isoc/$(SOC)
 FLAGS += -Icpu/$(CPU)
 
 SOURCES += cpu/$(CPU)/cpu.c
-SOURCES += board/$(BUILD)/board.c
-SOURCES += board/$(BUILD)/screen.c
 
 SOURCES += md5.c
 
@@ -50,6 +54,14 @@ main.elf: $(OBJS)
 %.bin: %.ihx
 	objcopy $^ $@ -I ihex -O binary
 
+	@echo '---------- Segments ----------'
+	@egrep '(ABS,CON)|(REL,CON)' main.map | gawk --non-decimal-data '{dec = sprintf("%d","0x" $$2); print dec " " $$0}' | /usr/bin/sort -n -k1 | cut -f2- -d' ' | uniq
+	@echo '---------- Memory ----------'
+	@egrep 'available|EXTERNAL|FLASH' main.mem
+	@python3 scanfilesram.py
+
+
+
 .PHONY: clean
 
 SOURCES += board/zbs29_ssd1619/screen.c
@@ -59,8 +71,8 @@ SOURCES += board/zbs16_ssd1619/screen.c
 SOURCES += board/zbs29_uc8151/screen.c
 SOURCES += board/zbs27_ucvar/screen.c
 SOURCES += board/zbs42_ucvar/screen.c
-
-
+SOURCES += board/tagtype.c
+SOURCES += board/uicommon.c
 clean:
 	rm -f $(patsubst %.c,%.asm,$(SOURCES))
 	rm -f $(patsubst %.c,%.lst,$(SOURCES))

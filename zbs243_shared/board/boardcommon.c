@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include "printf.h"
-#include "screen.h"
-#include "board.h"
+//#include "tagtype.h"
+//#include "board.h"
 #include "flash.h"
 #include "uart.h"
 #include "spi.h"

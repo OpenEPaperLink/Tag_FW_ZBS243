@@ -4,8 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "board.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "uart.h"
 #include "zbs243.h"
 
