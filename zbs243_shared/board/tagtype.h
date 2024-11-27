@@ -15,6 +15,23 @@
 #define EEPROM_SETTINGS_AREA_LEN                (0x01000UL)
 #define EEPROM_IMG_START                        (0x01000UL)
 
+#ifdef M2_ZBS_16_SSD1619_BWR
+	#define EPD_SSD1619
+	#define SCREEN_WIDTH 152
+	#define SCREEN_HEIGHT 152
+	#define CUSTOMLUTS
+
+	#define EEPROM_IMG_EACH                         (0x02000UL)
+
+	#define HW_TYPE                                 SOLUM_154_SSD1619
+
+	#define HAS_EEPROM 1
+	#define HAS_SCREEN 1
+	#define NFC_TYPE 1
+	#define AP_EMULATE_TAG 1
+	#define UI_152x152
+#endif
+
 #ifdef M2_ZBS_29_SSD1619_BWR
 	#define EPD_SSD1619
 	#define SCREEN_WIDTH 128
@@ -64,7 +81,6 @@
 	#define AP_EMULATE_TAG 1
 
 	#define HW_TYPE							SOLUM_42_UCVAR	
-
 #endif
 
 

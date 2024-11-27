@@ -1,5 +1,5 @@
 
-BUILD		?= M2_ZBS_42_UCVAR_BWR
+BUILD		?= M2_ZBS_16_SSD1619_BWR
 SOC		?= zbs243
 
 #file containing main() must be first!

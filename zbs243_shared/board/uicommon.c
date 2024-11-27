@@ -85,3 +85,9 @@ void externalWakeHandler(uint8_t type) {
 #ifdef UI_400x300
 #include "ui_400x300.c"
 #endif
+
+#ifdef UI_152x152
+#include "ui_152x152.c"
+#endif
+
+
