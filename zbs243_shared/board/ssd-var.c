@@ -1,21 +1,24 @@
-#include "../ssd1619.h"
+#include "ssd-var.h"
 
 #include <stdbool.h>
 #include <string.h>
 
 #include "asmUtil.h"
 #include "barcode.h"
-#include "board.h"
+// #include "board.h"
 #include "cpu.h"
 #include "font.h"
 #include "lut.h"
 #include "printf.h"
-#include "screen.h"
-// #include "settings.h"
+// #include "screen.h"
+
+#include "settings.h"
 #include "sleep.h"
 #include "spi.h"
 #include "timer.h"
 #include "wdt.h"
+
+#include <stdlib.h>
 
 #define CMD_DRV_OUTPUT_CTRL 0x01
 #define CMD_SOFT_START_CTRL 0x0C
@@ -72,8 +75,6 @@
         P2_2 = 1;  \
     } while (0)
 
-extern void dump(uint8_t* __xdata a, uint16_t __xdata l);  // remove me when done
-
 static uint8_t __xdata epdCharSize = 1;   // character size, 1 or 2 (doubled)
 static bool __xdata directionY = true;    // print direction, X or Y (true)
 static uint8_t __xdata rbuffer[32];       // used to rotate bits around
@@ -87,11 +88,11 @@ static bool __xdata isInited = false;
 bool __xdata epdGPIOActive = false;
 
 #define LUT_BUFFER_SIZE 128
-static uint8_t waveformbuffer[LUT_BUFFER_SIZE];
 uint8_t __xdata customLUT[LUT_BUFFER_SIZE] = {0};
 
-struct waveform10* __xdata waveform10 = (struct waveform10*)waveformbuffer;  // holds the LUT/waveform
-struct waveform* __xdata waveform7 = (struct waveform*)waveformbuffer;       // holds the LUT/waveform
+static uint8_t* waveformbuffer;
+static struct waveform10* __xdata waveform10;
+static struct waveform* __xdata waveform7;
 
 #pragma callee_saves epdBusySleep
 #pragma callee_saves epdBusyWait
@@ -127,8 +128,7 @@ static void epdBusyWait(uint32_t timeout) {
             return;
     }
     pr("screen timeout %lu ticks :(\n", timerGet() - start);
-    while (1)
-        ;
+    while (1);
 }
 static void commandReadBegin(uint8_t cmd) {
     epdSelect();
@@ -191,23 +191,25 @@ static void commandBegin(uint8_t cmd) {
     markData();
 }
 static void epdReset() {
-    timerDelay(TIMER_TICKS_PER_SECOND / 100);
+    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
     P2_0 = 0;
-    timerDelay(TIMER_TICKS_PER_SECOND / 100);
+    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
     P2_0 = 1;
-    timerDelay(TIMER_TICKS_PER_SECOND / 100);
+    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
 
     shortCommand(CMD_SOFT_RESET);  // software reset
-    timerDelay(TIMER_TICKS_PER_SECOND / 100);
-    //shortCommand(CMD_SOFT_RESET2);
-    //timerDelay(TIMER_TICKS_PER_SECOND / 100);
+    timerDelay(TIMER_TICKS_PER_SECOND / 500);
+    shortCommand(CMD_SOFT_RESET2);
+    timerDelay(TIMER_TICKS_PER_SECOND / 500);
 }
 void epdConfigGPIO(bool setup) {
     // data / _command: 2.2
     // busy             2.1
     // reset            2.0
     // _select          1.7
+
     // bs1              1.2
+    // bs1 (freezer)    1.5
 
     // GENERIC SPI BUS PINS
     // spi.clk          0.0
@@ -216,15 +218,28 @@ void epdConfigGPIO(bool setup) {
     if (setup) {
         P2DIR |= (1 << 1);                // busy as input
         P2DIR &= ~((1 << 2) | (1 << 0));  // D/C and Reset as output
-        P1DIR &= ~((1 << 7) | (1 << 2) | (1 << 5));  // select and bs1 as output
-        //P1_2 = 0;                         // select 4-wire SPI / BS1 = low
-        P1_5 = 0;
+        P1DIR &= ~(1 << 7);               // EPD Select as output
         P1_7 = 1;                         // deselect EPD
+
+#ifdef EPD_VAR_FREEZER
+        P1DIR &= ~(1 << 5);  // BS1 as output
+        P1_5 = 0;            // BS1 low
+#else
+        P1DIR &= ~(1 << 2);  // BS1 as output
+        P1_2 = 0;            // BS1 low (4 wire SPI)
+#endif
+
     } else {
         P2DIR |= ((1 << 2) | (1 << 0));  // DC and Reset as input
         P2 &= ~((1 << 2) | (1 << 0));
-        P1DIR |= ((1 << 7) | (1 << 2));  // Select and BS1 as input
-        P2 &= ~((1 << 7));
+
+#ifdef EPD_VAR_FREEZER
+        P1DIR |= (1 << 7) | (1 << 5);  // BS1 as input
+                                       // P1_5 = 1;           // BS1 low
+#else
+        P1DIR |= (1 << 7) | (1 << 2);  // BS1 as input
+                                       // P1_2 = 1;           // BS1 low (4 wire SPI)
+#endif
     }
     epdGPIOActive = setup;
 }
@@ -233,39 +248,48 @@ void epdEnterSleep() {
     timerDelay(10);
     P2_0 = 1;
     timerDelay(50);
+#ifdef EPD_VAR_FREEZER
     epdReset();
+#endif
     shortCommand(CMD_SOFT_RESET2);
-    epdBusyWait(TIMER_TICKS_PER_MS * 15);
+    epdBusyWait(TIMER_TICKS_PER_MS * 150);
     shortCommand1(CMD_ENTER_SLEEP, 0x03);
     isInited = false;
 }
 void epdSetup() {
     epdReset();
+#ifdef VAR_BW16
+    commandBegin(CMD_DRV_OUTPUT_CTRL);
+    epdSend((SCREEN_HEIGHT - 1) & 0xff);
+    epdSend((SCREEN_HEIGHT - 1) >> 8);
+    epdSend(0x00);
+    commandEnd();
+    shortCommand1(CMD_BORDER_WAVEFORM_CTRL, 0x0B);  // stock says 0x33
+    shortCommand1(CMD_DUMMY_PERIOD, 0x1B);
+    shortCommand1(CMD_GATE_LINE_WIDTH, 0x0B);
+    shortCommand1(CMD_TEMP_SENSOR_CONTROL, 0x80);
+    shortCommand1(CMD_DISP_UPDATE_CTRL, 0x40);
+#else
     shortCommand1(CMD_ANALOG_BLK_CTRL, 0x54);
     shortCommand1(CMD_DIGITAL_BLK_CTRL, 0x3B);
     shortCommand2(CMD_UNKNOWN_1, 0x04, 0x63);
-
     commandBegin(CMD_SOFT_START_CTRL);
     epdSend(0x8f);
     epdSend(0x8f);
     epdSend(0x8f);
     epdSend(0x3f);
     commandEnd();
-
     commandBegin(CMD_DRV_OUTPUT_CTRL);
     epdSend((SCREEN_HEIGHT - 1) & 0xff);
     epdSend((SCREEN_HEIGHT - 1) >> 8);
     epdSend(0x00);
     commandEnd();
-
-    // shortCommand1(CMD_DATA_ENTRY_MODE, 0x03);
-    // shortCommand1(CMD_BORDER_WAVEFORM_CTRL, 0xC0); // blurry edges
     shortCommand1(CMD_BORDER_WAVEFORM_CTRL, 0x01);
     shortCommand1(CMD_TEMP_SENSOR_CONTROL, 0x80);
     shortCommand1(CMD_DISP_UPDATE_CTRL2, 0xB1);  // mode 1 (i2C)
-    // shortCommand1(CMD_DISP_UPDATE_CTRL2, 0xB9);  // mode 2?
     shortCommand(CMD_ACTIVATION);
     epdBusyWait(TIMER_TICKS_PER_SECOND);
+#endif
     isInited = true;
     currentLut = EPD_LUT_DEFAULT;
 }
@@ -280,33 +304,37 @@ uint16_t epdGetBattery(void) {
     uint16_t voltage = 2600;
     uint8_t val;
 
-    epdReset(); 
-   
+    timerDelay(50);
+    P2_0 = 0;
+    timerDelay(50);
+    P2_0 = 1;
+    timerDelay(50);
+
+    shortCommand(CMD_SOFT_RESET);  // software reset
+    epdBusyWait(TIMER_TICKS_PER_MS * 30);
+    shortCommand(CMD_SOFT_RESET2);
+    epdBusyWait(TIMER_TICKS_PER_MS * 30);
+
     shortCommand1(CMD_DISP_UPDATE_CTRL2, SCREEN_CMD_CLOCK_ON | SCREEN_CMD_ANALOG_ON);
     shortCommand(CMD_ACTIVATION);
-    epdBusyWait(TIMER_TICKS_PER_MS * 1000);
+    epdBusyWait(TIMER_TICKS_PER_MS * 150);
 
     for (val = 3; val < 8; val++) {
         shortCommand1(CMD_SETUP_VOLT_DETECT, val);
-        epdBusyWait(TIMER_TICKS_PER_MS * 1000);
+        epdBusyWait(TIMER_TICKS_PER_MS * 150);
         if (epdGetStatus() & 0x10) {  // set if voltage is less than threshold ( == 1.9 + val / 10)
             voltage = 1850 + mathPrvMul8x8(val, 100);
             break;
         }
     }
-    //shortCommand(CMD_SOFT_RESET2);
-    //epdBusyWait(TIMER_TICKS_PER_MS * 1000);
+#ifndef EPD_VAR_FREEZER
+    shortCommand(CMD_SOFT_RESET2);
+    epdBusyWait(TIMER_TICKS_PER_MS * 15);
+#endif
     shortCommand1(CMD_ENTER_SLEEP, 0x03);
     return voltage;
 }
 
-void loadFixedTempOTPLUT() {
-    shortCommand1(0x18, 0x48);                   // external temp sensor
-    shortCommand2(0x1A, 0x05, 0x00);             // < temp register
-    shortCommand1(CMD_DISP_UPDATE_CTRL2, 0xB1);  // mode 1 (i2C)
-    shortCommand(CMD_ACTIVATION);
-    epdBusyWait(TIMER_TICKS_PER_SECOND);
-}
 static void writeLut() {
     commandBegin(CMD_WRITE_LUT);
     for (uint8_t i = 0; i < (dispLutSize * 10); i++)
@@ -370,6 +398,7 @@ static void lutGroupRepeatReduce(uint8_t group, uint8_t factor) {
     }
 }
 void selectLUT(uint8_t lut) {
+#ifdef CUSTOMLUTS
     if (currentLut == lut) {
         return;
     }
@@ -388,16 +417,22 @@ void selectLUT(uint8_t lut) {
         return;
     }
 
+    waveformbuffer = malloc(150);
+    waveform10 = (struct waveform10*)waveformbuffer;  // holds the LUT/waveform
+    waveform7 = (struct waveform*)waveformbuffer;     // holds the LUT/waveform
+
     // download the current LUT from the waveform buffer
     readLut();
 
     if (dispLutSize == 0) {
         dispLutSize = getLutSize();
         dispLutSize /= 10;
+    #ifdef DEBUGEPD
         pr("lut size = %d\n", dispLutSize);
-#ifdef PRINT_LUT
+    #endif
+    #ifdef PRINT_LUT
         dump(waveformbuffer, LUT_BUFFER_SIZE);
-#endif
+    #endif
         memcpy(customLUT, waveformbuffer, dispLutSize * 10);
     }
 
@@ -435,7 +470,7 @@ void selectLUT(uint8_t lut) {
             break;
     }
 
-        // Handling if we received an OTA LUT
+    // Handling if we received an OTA LUT
     if (lut == EPD_LUT_OTA) {
         memcpy(waveformbuffer, customLUT, dispLutSize * 10);
         writeLut();
@@ -448,6 +483,7 @@ void selectLUT(uint8_t lut) {
         shortCommand1(CMD_DUMMY_PERIOD, customLUT[74]);
         shortCommand1(CMD_GATE_LINE_WIDTH, customLUT[75]);
         currentLut = lut;
+        free(waveformbuffer);
         return;
     }
 
@@ -458,6 +494,8 @@ void selectLUT(uint8_t lut) {
         lutGroupDisable(LUTGROUP_UNUSED4);
     }
     writeLut();
+    free(waveformbuffer);
+#endif
 }
 
 void setWindowX(uint16_t start, uint16_t end) {
@@ -465,7 +503,7 @@ void setWindowX(uint16_t start, uint16_t end) {
 }
 void setWindowY(uint16_t start, uint16_t end) {
     commandBegin(CMD_WINDOW_Y_SIZE);
-    epdSend((start)&0xff);
+    epdSend((start) & 0xff);
     epdSend((start) >> 8);
     epdSend((end - 1) & 0xff);
     epdSend((end - 1) >> 8);
@@ -474,7 +512,7 @@ void setWindowY(uint16_t start, uint16_t end) {
 void setPosXY(uint16_t x, uint16_t y) {
     shortCommand1(CMD_XSTART_POS, (uint8_t)(x / 8));
     commandBegin(CMD_YSTART_POS);
-    epdSend((y)&0xff);
+    epdSend((y) & 0xff);
     epdSend((y) >> 8);
     commandEnd();
 }
@@ -506,7 +544,11 @@ void clearScreen() {
     epdBusyWait(TIMER_TICKS_PER_MS * 100);
 }
 void draw() {
+#ifdef VAR_BW16
+    shortCommand1(0x22, 0xF7);
+#else
     shortCommand1(0x22, 0xCF);
+#endif
     // shortCommand1(0x22, SCREEN_CMD_REFRESH);
     shortCommand(0x20);
     epdBusyWait(TIMER_TICKS_PER_SECOND * 120);
@@ -713,6 +755,8 @@ static void pushYFontBytesToEPD(uint8_t byte1, uint8_t byte2) {
     }
 }
 void writeCharEPD(uint8_t c) {
+    c -= 0x20;
+
     // Writes a single character to the framebuffer
     bool empty = true;
     for (uint8_t i = 0; i < 20; i++) {

@@ -144,6 +144,14 @@ __bit eepromInit(void) {
                         valid = false;
                 }
                 break;
+            default:
+#ifdef DEBUGEEPROM
+                mOpcodeErz4K = 0x20;
+                mEepromSize = 0x00080000ul;
+                pr("Unsupported non-SFDP eeprom, improvising...\n");
+                valid = true;
+                break;
+#endif
         }
         eepromPrvDeselect();
         free(tempBufferE);
@@ -161,7 +169,7 @@ __bit eepromInit(void) {
 
     // now we need to find the JEDEC parameter table header
     for (i = 0; i <= nParamHdrs; i++) {
-        eepromPrvSfdpRead(mathPrvMul8x8(i, 8) + 8, (__xdata uint8_t*)buf, 8);
+        eepromPrvSfdpRead(mathPrvMul8x8(i, 8) + 8, (__xdata uint8_t *)buf, 8);
         if (buf[0] == 0x00 && buf[2] == 0x01 && buf[3] >= 9) {
             uint8_t j;
 

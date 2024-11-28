@@ -23,7 +23,7 @@
 #include "syncedproto.h"
 #include "timer.h"
 #include "uart.h"  // for initUart
-//#include "uicommon.h"
+#include "uicommon.h"
 #include "wdt.h"
 
 uint16_t __xdata dataReqAttemptArr[POWER_SAVING_SMOOTHING] = {0};  // Holds the amount of attempts required per data_req/check-in
@@ -132,14 +132,11 @@ static void configUART(const bool setup) {
 static void configEEPROM(const bool setup) {
     if (setup == eepromActive) return;
     if (setup) {
-#ifdef EXTRA_EEPROM_LINES
-        P1FUNC &= ~(1 << 1) | (1 << 2) | (1 << 6);
-        P1DIR &= ~(1 << 1) | (1 << 2) | (1 << 6);
-        P1_6 = 1;
-        P1_2 = 1;
-#else
         P1FUNC &= ~(1 << 1);
         P1DIR &= ~(1 << 1);
+#ifdef EXTRA_EEPROM_LINES
+        P1_6 = 1;
+        P1_2 = 1;
 #endif
         if (!eepromInit()) {
             powerDown(INIT_RADIO);
@@ -151,8 +148,12 @@ static void configEEPROM(const bool setup) {
         }
     } else {
         P1DIR |= (1 << 1);
+#ifdef EXTRA_EEPROM_LINES
+        P1_6 = 0;
+        P1_2 = 0;
+#endif
     }
-    setup == eepromActive;  // wtf, this does nothing.
+    eepromActive = setup;
 }
 
 static void configI2C(const bool setup) {
@@ -277,6 +278,10 @@ void doSleep(const uint32_t __xdata t) {
     P1DIR = 0x86;
     P1PULL = 0x86;
 
+    //P1DIR = 0xF6;
+    //P1 = 0;
+    //P1PULL = 0xF6;
+
     P2DIR = 7;
     P2 = 0;
     P2PULL = 5;
@@ -327,8 +332,17 @@ void doSleep(const uint32_t __xdata t) {
     }
 
     if (tagSettings.enableRFWake) {
-        //  enabled RF wake, adds a little extra energy draw!
+//  enabled RF wake, adds a little extra energy draw!
+#ifdef BOARD_M2_29_FREEZER
+        // P1DIR &= ~(1 << 3);
+        P1DIR |= (1 << 4);
+        P1LVLSEL &= ~(1 << 4);
+        P1INTEN |= (1 << 4);
+        P1CHSTA &= ~(1 << 4);
+        P1PULL &= ~(1<<4);
+#else
         RADIO_RadioPowerCtl &= 0xFB;
+#endif
     }
 
     // sleepy time
@@ -341,6 +355,10 @@ void doSleep(const uint32_t __xdata t) {
             wakeUpReason = WAKEUP_REASON_RF;
             break;
         case RADIO_WAKE_REASON_EXT:
+            if ((P1CHSTA & (1 << 4))) {
+                wakeUpReason = WAKEUP_REASON_RF;
+                P1CHSTA &= ~(1 << 4);
+            }
             if ((P1CHSTA & (1 << 0)) && (capabilities & CAPABILITY_HAS_WAKE_BUTTON)) {
                 wakeUpReason = WAKEUP_REASON_BUTTON1;
                 P1CHSTA &= ~(1 << 0);
