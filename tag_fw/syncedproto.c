@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdlib.h>
+
 #include "asmUtil.h"
 #include "comms.h"
 #include "cpu.h"
@@ -28,6 +30,8 @@
 #include "uart.h"
 #include "md5.h"
 #include "flash.h"
+
+#include "g5/g5dec.h"
 
 // download-stuff
 __xdata uint8_t blockbuffer[BLOCK_XFER_BUFFER_SIZE] = {0};
@@ -575,6 +579,7 @@ void eraseImageBlocks() {
 void drawImageFromEeprom(const uint8_t imgSlot, uint8_t lut) {
     drawImageAtAddress(getAddressForSlot(imgSlot), lut);
 }
+
 static uint32_t getHighSlotId() {
     uint32_t temp = 0;
     for (__xdata uint8_t c = 0; c < imgSlots; c++) {
@@ -591,6 +596,87 @@ static uint32_t getHighSlotId() {
     pr("PROTO: found high id=%lu in slot %d\n", temp, nextImgSlot);
 #endif
     return temp;
+}
+
+static uint8_t findNextSlot(const __xdata struct AvailDataInfo *avail) {
+    // new transfer
+    powerUp(INIT_EEPROM);
+
+    // go to the next image slot
+    uint8_t startingSlot = nextImgSlot;
+
+    // if we encounter a special image type, start looking from slot 0, to prevent the image being overwritten when we do an OTA update
+    if (avail->dataTypeArgument & 0xFC != 0x00) {
+        startingSlot = 0;
+    }
+
+    while (1) {
+        nextImgSlot++;
+        if (nextImgSlot >= imgSlots) nextImgSlot = 0;
+        if (nextImgSlot == startingSlot) {
+            powerDown(INIT_EEPROM);
+#ifdef DEBUGPROTO
+            pr("PROTO: No slots available. Too many images in the slideshow?\n");
+#endif
+            return 0;
+        }
+        __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)blockbuffer;
+        eepromRead(getAddressForSlot(nextImgSlot), eih, sizeof(struct EepromImageHeader));
+        // check if the marker is indeed valid
+        if (xMemEqual4(&eih->validMarker, &markerValid)) {
+            struct imageDataTypeArgStruct *eepromDataArgument = (struct imageDataTypeArgStruct *)&(eih->argument);
+            // normal type, we can overwrite this
+            if (eepromDataArgument->specialType == 0x00) break;
+        } else {
+            // bullshit marker, so safe to overwrite
+            break;
+        }
+    }
+
+    __xdata uint8_t attempt = 5;
+    while (attempt--) {
+        if (eepromErase(getAddressForSlot(nextImgSlot), EEPROM_IMG_EACH / EEPROM_ERZ_SECTOR_SZ)) goto eraseSuccess;
+    }
+eepromFail:
+    powerDown(INIT_RADIO);
+    powerUp(INIT_EPD);
+    showNoEEPROM();
+    powerDown(INIT_EEPROM | INIT_EPD);
+    doSleep(-1);
+    wdtDeviceReset();
+eraseSuccess:
+    powerDown(INIT_EEPROM);
+    return nextImgSlot;
+}
+
+static uint8_t decodeImageG5(const __xdata struct AvailDataInfo *avail, uint8_t compressedImgSlot) __reentrant {
+    // find next slot to decompress image into
+    uint8_t decompressedSlot = findNextSlot(avail);
+
+    // decode image into slot
+
+    // mark slot with compressed dataver, corrected datatype
+    __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)malloc(sizeof(struct EepromImageHeader));
+    xMemCopy8(&eih->version, &avail->dataVer);
+    eih->validMarker = EEPROM_IMG_VALID;
+    eih->id = ++curHighSlotId;
+    eih->size = avail->dataSize; // THIS SHOULD BE UPDATED TO THE DECOMPRESSED SIZE!
+    if (avail->dataType == DATATYPE_IMG_G5_1BPP) {
+        eih->dataType = DATATYPE_IMG_RAW_1BPP;
+    } else {
+        eih->dataType = DATATYPE_IMG_RAW_2BPP;
+    }
+    eih->argument = avail->dataTypeArgument;
+    eepromWrite(getAddressForSlot(decompressedSlot), eih, sizeof(struct EepromImageHeader));
+    free(eih);
+
+    // invalidate slot with compressed data
+    __xdata uint8_t *temp = malloc(16);
+    memset(temp, 0x00, 16);
+    eepromWrite(getAddressForSlot(compressedImgSlot), temp, 16);
+    // jump back
+    free(temp);
+    return decompressedSlot;
 }
 
 // data transfer stuff
@@ -770,55 +856,7 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
         pr("PROTO: restarting image download\n");
 #endif
     } else {
-        // new transfer
-        powerUp(INIT_EEPROM);
-
-        // go to the next image slot
-        uint8_t startingSlot = nextImgSlot;
-
-        // if we encounter a special image type, start looking from slot 0, to prevent the image being overwritten when we do an OTA update
-        if (avail->dataTypeArgument & 0xFC != 0x00) {
-            startingSlot = 0;
-        }
-
-        while (1) {
-            nextImgSlot++;
-            if (nextImgSlot >= imgSlots) nextImgSlot = 0;
-            if (nextImgSlot == startingSlot) {
-                powerDown(INIT_EEPROM);
-#ifdef DEBUGPROTO
-                pr("PROTO: No slots available. Too many images in the slideshow?\n");
-#endif
-                return true;
-            }
-            __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)blockbuffer;
-            eepromRead(getAddressForSlot(nextImgSlot), eih, sizeof(struct EepromImageHeader));
-            // check if the marker is indeed valid
-            if (xMemEqual4(&eih->validMarker, &markerValid)) {
-                struct imageDataTypeArgStruct *eepromDataArgument = (struct imageDataTypeArgStruct *)&(eih->argument);
-                // normal type, we can overwrite this
-                if (eepromDataArgument->specialType == 0x00) break;
-            } else {
-                // bullshit marker, so safe to overwrite
-                break;
-            }
-        }
-
-        xferImgSlot = nextImgSlot;
-
-        __xdata uint8_t attempt = 5;
-        while (attempt--) {
-            if (eepromErase(getAddressForSlot(xferImgSlot), EEPROM_IMG_EACH / EEPROM_ERZ_SECTOR_SZ)) goto eraseSuccess;
-        }
-    eepromFail:
-        powerDown(INIT_RADIO);
-        powerUp(INIT_EPD);
-        showNoEEPROM();
-        powerDown(INIT_EEPROM | INIT_EPD);
-        doSleep(-1);
-        wdtDeviceReset();
-    eraseSuccess:
-        powerDown(INIT_EEPROM);
+        xferImgSlot = findNextSlot(avail);
 #ifdef DEBUGPROTO
         pr("PROTO: new download, writing to slot %d\n", xferImgSlot);
 #endif
@@ -882,6 +920,10 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
 #endif
     eepromWrite(getAddressForSlot(xferImgSlot), eih, sizeof(struct EepromImageHeader));
     powerDown(INIT_EEPROM);
+
+    if ((xferDataInfo.dataType == DATATYPE_IMG_G5_1BPP) || (xferDataInfo.dataType == DATATYPE_IMG_G5_2BPP)) {
+        xferImgSlot = decodeImageG5(&xferDataInfo, xferImgSlot);
+    }
 
     return true;
 }
@@ -990,6 +1032,7 @@ inline bool processImageDataAvail(__xdata struct AvailDataInfo *avail) {
 
                     // not preload, draw now
                     wdt60s();
+
                     curImgSlot = xferImgSlot;
                     powerUp(INIT_EPD | INIT_EEPROM);
                     drawImageFromEeprom(xferImgSlot, arg.lut);
@@ -1011,6 +1054,8 @@ bool processAvailDataInfo(__xdata struct AvailDataInfo *avail) __reentrant {
         case DATATYPE_IMG_DIFF:
         case DATATYPE_IMG_RAW_1BPP:
         case DATATYPE_IMG_RAW_2BPP:
+        case DATATYPE_IMG_G5_1BPP:
+        case DATATYPE_IMG_G5_2BPP:
             return processImageDataAvail(avail);
             break;
         case DATATYPE_FW_UPDATE:

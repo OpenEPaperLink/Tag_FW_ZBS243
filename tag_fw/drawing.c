@@ -11,10 +11,14 @@
 #include "timer.h"
 #include "uicommon.h"  // for addIcons
 #include <stdlib.h>
+#include "settings.h"
 
 uint8_t __xdata* drawBuffer;
 
 void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
+    #ifdef DEBUGDRAWING
+            pr("DRAW: Start\n");
+#endif
     drawBuffer = malloc(512);
     if (!drawBuffer) {
 #ifdef DEBUGDRAWING

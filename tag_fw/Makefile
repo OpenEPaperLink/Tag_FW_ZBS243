@@ -1,5 +1,5 @@
 
-BUILD		?= M2_ZBS_16_SSD1619_BWR
+BUILD		?= M2_ZBS_29_SSDVAR_BWR
 SOC		?= zbs243
 
 #file containing main() must be first!
@@ -10,6 +10,7 @@ SOURCES		+= board/uicommon.c
 SOURCES		+= comms.c
 SOURCES		+= syncedproto.c
 SOURCES		+= powermgt.c barcode.c i2cdevices.c settings.c
+SOURCES 	+= g5/g5dec.c
 
 all:	#make sure it is the first target
 
