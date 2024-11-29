@@ -43,7 +43,7 @@
 //
 
 #ifndef MAX_IMAGE_FLIPS
-#define MAX_IMAGE_FLIPS 512
+#define MAX_IMAGE_FLIPS 32
 #endif
 // Horizontal prefix bits
 enum {

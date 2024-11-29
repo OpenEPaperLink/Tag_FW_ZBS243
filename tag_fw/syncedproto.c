@@ -652,15 +652,38 @@ eraseSuccess:
 static uint8_t decodeImageG5(const __xdata struct AvailDataInfo *avail, uint8_t compressedImgSlot) __reentrant {
     // find next slot to decompress image into
     uint8_t decompressedSlot = findNextSlot(avail);
+    pr("reading data from slot %d\n", compressedImgSlot);
+    powerUp(INIT_EEPROM);
+    eepromRead(getAddressForSlot(compressedImgSlot) + sizeof(struct EepromImageHeader), blockbuffer, 4096);
+    dump(blockbuffer, 128);
 
     // decode image into slot
+
+    __xdata uint8_t *tempblock = malloc(SCREEN_WIDTH/8);
+
+
+    uint16_t max_y = SCREEN_HEIGHT;
+    if (avail->dataType == DATATYPE_IMG_G5_2BPP) max_y *= 2;
+
+    static G5DECIMAGE g5dec;
+    int rc = g5_decode_init(&g5dec, SCREEN_WIDTH, max_y, blockbuffer, avail->dataSize);
+    pr("G5 init reports %d\n", rc);
+
+
+    for (uint16_t y = 0; y < max_y; y++) {
+        rc = g5_decode_line(&g5dec, tempblock);
+        eepromWrite(getAddressForSlot(decompressedSlot) + sizeof(struct EepromImageHeader) + ((SCREEN_WIDTH/8) * y), tempblock, SCREEN_WIDTH/8);
+        pr("Doing y=%d, rc=%d\n", y, rc);
+        if (y == 1) dump(tempblock, 16);
+        if (y == 16) dump(tempblock, 16);
+    }
 
     // mark slot with compressed dataver, corrected datatype
     __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)malloc(sizeof(struct EepromImageHeader));
     xMemCopy8(&eih->version, &avail->dataVer);
     eih->validMarker = EEPROM_IMG_VALID;
     eih->id = ++curHighSlotId;
-    eih->size = avail->dataSize; // THIS SHOULD BE UPDATED TO THE DECOMPRESSED SIZE!
+    eih->size = avail->dataSize;  // THIS SHOULD BE UPDATED TO THE DECOMPRESSED SIZE!
     if (avail->dataType == DATATYPE_IMG_G5_1BPP) {
         eih->dataType = DATATYPE_IMG_RAW_1BPP;
     } else {
@@ -921,6 +944,7 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
     eepromWrite(getAddressForSlot(xferImgSlot), eih, sizeof(struct EepromImageHeader));
     powerDown(INIT_EEPROM);
 
+    xferDataInfo.dataSize = imageSize;
     if ((xferDataInfo.dataType == DATATYPE_IMG_G5_1BPP) || (xferDataInfo.dataType == DATATYPE_IMG_G5_2BPP)) {
         xferImgSlot = decodeImageG5(&xferDataInfo, xferImgSlot);
     }

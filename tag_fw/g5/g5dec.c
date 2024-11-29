@@ -15,23 +15,19 @@
 #include "g5dec.h"
 
 
-
-
-static uint8_t countLeadingZeros16(uint16_t x) {
-    if (x == 0) return 16; // Special case for zero
-
+static uint8_t countLeadingZeros(uint32_t x) {
+    if (x == 0) return 32; // Special case for zero
+    
     uint8_t count = 0;
-    uint16_t mask = 0x8000; // Start with the most significant bit for 16 bits
+    uint32_t mask = 0x80000000; // Start with the most significant bit
 
     while ((x & mask) == 0) {
         count++;
-        mask >>= 1;
+        mask >>= 1; // Shift the mask to the right
     }
 
     return count;
 }
-
-
 
 
 /*
@@ -158,7 +154,7 @@ static void Decode_Begin(__xdata G5DECIMAGE *pPage) __reentrant
     pPage->ulBits = TIFFMOTOLONG(pPage->pSrc); // load 32 bits to start
     pPage->ulBitOff = 0;
     // Calculate the number of bits needed for a long horizontal code
-    pPage->iHLen = 32 - countLeadingZeros16(pPage->iWidth);
+    pPage->iHLen = 32 - countLeadingZeros(pPage->iWidth);
 } /* Decode_Begin() */
 //
 // Decode a single line of G5 data (private function)
