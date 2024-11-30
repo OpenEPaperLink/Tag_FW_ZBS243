@@ -25,6 +25,8 @@
 
 #include "uart.h"
 
+#include <stdlib.h>
+
 #include "../shared/oepl-definitions.h"
 #include "../shared/oepl-proto.h"
 
@@ -43,20 +45,15 @@ static const uint64_t __code __at(FWMAGICOFFSET) firmwaremagic = (0xdeadd0d0beef
 
 uint8_t currentTagMode = TAG_MODE_CHANSEARCH;
 
-__xdata uint8_t  slideShowCurrentImg = 0;
-__xdata uint8_t  slideShowRefreshCount = 1;
+__xdata uint8_t slideShowCurrentImg = 0;
+__xdata uint8_t slideShowRefreshCount = 1;
 
-extern __xdata uint8_t *__idata blockp;
-extern __xdata uint8_t blockbuffer[];
-
-#define HEAP_SIZE 1024
+#define HEAP_SIZE 5000
 // This firmware requires a rather large heap. This overrides SDCC's built-in heap size (1024)
 __xdata char __sdcc_heap[HEAP_SIZE];
 const unsigned int __sdcc_heap_size = HEAP_SIZE;
 
-static __xdata bool  secondLongCheckIn = false;  // send another full request if the previous was a special reason
-
-uint8_t *rebootP;
+static __xdata bool secondLongCheckIn = false;  // send another full request if the previous was a special reason
 
 #ifdef DEBUGGUI
 void displayLoop() {
@@ -198,7 +195,7 @@ uint8_t channelSelect(uint8_t rounds) __reentrant {  // returns 0 if no accesspo
 
 void validateMacAddress() {
     // check if the mac contains at least some non-0xFF values
-    for (__xdata uint8_t  c = 0; c < 8; c++) {
+    for (__xdata uint8_t c = 0; c < 8; c++) {
         if (mSelfMac[c] != 0xFF) goto macIsValid;
     }
 // invalid mac address. Display warning screen and sleep forever
@@ -645,6 +642,22 @@ void executeCommand(uint8_t cmd) {
     }
 }
 
+void MemTest51() {
+    pr("Testing memory...\n");
+    for (int16_t c = 4000; c < 16384; c += 4) {
+        __xdata uint8_t *test = malloc(c);
+        if (!test) {
+            pr("\nFailed to allocate %d bytes\n", c);
+            return;
+        } else {
+            pr("\rAllocated %d bytes... ", c);
+            pr("OKAY");
+            free(test);
+        }
+        wdt10s();
+    }
+}
+
 void main() {
     setupPortsInitial();
     powerUp(INIT_BASE | INIT_UART);
@@ -671,6 +684,7 @@ void main() {
     doSleep(400UL);
     powerUp(INIT_EEPROM | INIT_UART);
 
+    MemTest51();
     // load settings from infopage
     loadSettings();
     // invalidate the settings, and write them back in a later state
@@ -811,6 +825,8 @@ void main() {
     // this is the loop we'll stay in forever, basically.
     while (1) {
         powerUp(INIT_UART);
+        MemTest51();
+
         wdt10s();
         switch (currentTagMode) {
             case TAG_MODE_ASSOCIATED:

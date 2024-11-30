@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 
-#define FW_VERSION 0x0028         // version number
-#define FW_VERSION_SUFFIX "-SLDS" // suffix, like -RC1 or whatever.
-// #define DEBUGBLOCKS            // uncomment to enable extra debug information on the block transfers
+#define FW_VERSION 0x0029         // version number
+#define FW_VERSION_SUFFIX "-G5" // suffix, like -RC1 or whatever.
+#define DEBUGBLOCKS            // uncomment to enable extra debug information on the block transfers
 #define DEBUGPROTO              // debug protocol
 // #define DEBUGOTA                 // debug OTA FW updates
 #define DEBUGDRAWING             // debug the drawing part

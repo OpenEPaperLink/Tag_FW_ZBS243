@@ -19,7 +19,8 @@ include cpu/$(CPU)/make.mk
 include board/make.mk
 
 FLAGS += -D$(BUILD)
-
+FLAGS += --xram-loc 0xe300 # was 0xe000
+FLAGS += --xram-size 0x1D00 --opt-code-speed
 FLAGS += -Iboard/
 FLAGS += -Isoc/$(SOC)
 FLAGS += -Icpu/$(CPU)

@@ -13,20 +13,18 @@
 #include <stdlib.h>
 #include "settings.h"
 
-uint8_t __xdata* drawBuffer;
-
 void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
-    #ifdef DEBUGDRAWING
-            pr("DRAW: Start\n");
+#ifdef DEBUGDRAWING
+    pr("DRAW: Start\n");
 #endif
-    drawBuffer = malloc(512);
+    __xdata uint8_t* drawBuffer = malloc(512);
     if (!drawBuffer) {
 #ifdef DEBUGDRAWING
         pr("DRAW: malloc during draw failed..\n");
 #endif
         return;
     }
-    static struct EepromImageHeader* __xdata eih;
+    static __xdata struct EepromImageHeader* eih;
     eih = (struct EepromImageHeader*)drawBuffer;
     eepromRead(addr, drawBuffer, sizeof(struct EepromImageHeader));
     switch (eih->dataType) {
@@ -40,7 +38,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
             clearScreen();
 
             beginWriteFramebuffer(EPD_COLOR_BLACK);
-            #ifdef EPD_BYTEWISE_CS
+#ifdef EPD_BYTEWISE_CS
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
                     eepromRead(addr + sizeof(struct EepromImageHeader) + c, drawBuffer, 512);
@@ -49,7 +47,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
                 epdDeselect();
             }
-            #else
+#else
             epdSelect();
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
@@ -60,7 +58,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
             }
             epdDeselect();
-            #endif
+#endif
             endWriteFramebuffer();
 
             break;
@@ -71,9 +69,8 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
             if (lut) selectLUT(lut);
             beginFullscreenImage();
 
-
             beginWriteFramebuffer(EPD_COLOR_BLACK);
-            #ifdef EPD_BYTEWISE_CS
+#ifdef EPD_BYTEWISE_CS
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
                     eepromRead(addr + sizeof(struct EepromImageHeader) + c, drawBuffer, 512);
@@ -82,7 +79,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
                 epdDeselect();
             }
-            #else
+#else
             epdSelect();
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
@@ -93,11 +90,11 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
             }
             epdDeselect();
-            #endif
+#endif
             endWriteFramebuffer();
 
             beginWriteFramebuffer(EPD_COLOR_RED);
-            #ifdef EPD_BYTEWISE_CS
+#ifdef EPD_BYTEWISE_CS
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
                     eepromRead(addr + sizeof(struct EepromImageHeader) + (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)) + c, drawBuffer, 512);
@@ -106,7 +103,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
                 epdDeselect();
             }
-            #else
+#else
             epdSelect();
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
@@ -117,7 +114,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
             }
             epdDeselect();
-            #endif
+#endif
             endWriteFramebuffer();
             break;
         default:  // prevent drawing from an unknown file image type
