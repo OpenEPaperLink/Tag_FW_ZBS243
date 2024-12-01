@@ -42,9 +42,9 @@
 // You can define this in your compiler macros to override the default vlaue
 //
 
-#ifndef MAX_IMAGE_FLIPS
-#define MAX_IMAGE_FLIPS 32
-#endif
+// should be enough to do the largest screens we have on 8051-based tags (except for certain manufacturers)
+#define MAX_IMAGE_FLIPS 640
+
 // Horizontal prefix bits
 enum {
     HORIZ_SHORT_SHORT=0,

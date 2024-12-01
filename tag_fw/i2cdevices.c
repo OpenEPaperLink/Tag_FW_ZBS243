@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdlib.h>
+
 #include "cpu.h"
 #include "i2c.h"
 #include "printf.h"
@@ -73,7 +75,7 @@ void loadURLtoNTag() {
     // https://learn.adafruit.com/adafruit-pn532-rfid-nfc/ndef << very helpful
 
     uint8_t __xdata i2cbuffer[18];
-    __xdata uint8_t* tempbuffer;// = blockbuffer + 2048;
+    __xdata uint8_t* tempbuffer = malloc(128);
 
     //strncpy(tempbuffer + 7, blockbuffer + sizeof(struct blockData), 245);
     uint8_t __xdata len = strlen(tempbuffer + 7);
@@ -106,6 +108,7 @@ void loadURLtoNTag() {
         uint8_t res = i2cTransact(&i2ctrans, 1);
         timerDelay(133300);
     }
+    free(tempbuffer);
 }
 
 void i2cBusScan() {

@@ -48,7 +48,7 @@ uint8_t currentTagMode = TAG_MODE_CHANSEARCH;
 __xdata uint8_t slideShowCurrentImg = 0;
 __xdata uint8_t slideShowRefreshCount = 1;
 
-#define HEAP_SIZE 5000
+#define HEAP_SIZE 5120
 // This firmware requires a rather large heap. This overrides SDCC's built-in heap size (1024)
 __xdata char __sdcc_heap[HEAP_SIZE];
 const unsigned int __sdcc_heap_size = HEAP_SIZE;
@@ -642,21 +642,25 @@ void executeCommand(uint8_t cmd) {
     }
 }
 
+#ifdef DEBUGMEMLEAKS
 void MemTest51() {
     pr("Testing memory...\n");
-    for (int16_t c = 4000; c < 16384; c += 4) {
+    #define MEMTESTSTART 3800
+    for (int16_t c = MEMTESTSTART; c < 8200; c += 4) {
         __xdata uint8_t *test = malloc(c);
         if (!test) {
-            pr("\nFailed to allocate %d bytes\n", c);
+            pr("\n");
+            if(c == MEMTESTSTART)pr("Failed to allocate %d bytes\n", c);
             return;
         } else {
             pr("\rAllocated %d bytes... ", c);
-            pr("OKAY");
+            pr("OK");
             free(test);
         }
         wdt10s();
     }
 }
+#endif
 
 void main() {
     setupPortsInitial();
@@ -664,7 +668,7 @@ void main() {
     pr("BOOTED> %04X%s\n", fwVersion, fwVersionSuffix);
 
 #ifdef DEBUGGUI
-    displayLoop();  // remove me
+    displayLoop();
 #endif
 
     // Find the reason why we're booting; is this a WDT?
@@ -684,7 +688,11 @@ void main() {
     doSleep(400UL);
     powerUp(INIT_EEPROM | INIT_UART);
 
+    // do a memory allocation test
+#ifdef DEBUGMEMLEAKS
     MemTest51();
+#endif
+
     // load settings from infopage
     loadSettings();
     // invalidate the settings, and write them back in a later state
@@ -825,7 +833,9 @@ void main() {
     // this is the loop we'll stay in forever, basically.
     while (1) {
         powerUp(INIT_UART);
+#ifdef DEBUGMEMLEAKS
         MemTest51();
+#endif
 
         wdt10s();
         switch (currentTagMode) {
