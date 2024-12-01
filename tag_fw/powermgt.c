@@ -278,9 +278,9 @@ void doSleep(const uint32_t __xdata t) {
     P1DIR = 0x86;
     P1PULL = 0x86;
 
-    //P1DIR = 0xF6;
-    //P1 = 0;
-    //P1PULL = 0xF6;
+    // P1DIR = 0xF6;
+    // P1 = 0;
+    // P1PULL = 0xF6;
 
     P2DIR = 7;
     P2 = 0;
@@ -339,7 +339,7 @@ void doSleep(const uint32_t __xdata t) {
         P1LVLSEL &= ~(1 << 4);
         P1INTEN |= (1 << 4);
         P1CHSTA &= ~(1 << 4);
-        P1PULL &= ~(1<<4);
+        P1PULL &= ~(1 << 4);
 #else
         RADIO_RadioPowerCtl &= 0xFB;
 #endif
@@ -416,6 +416,9 @@ void addAverageValue() {
 }
 
 uint16_t getNextSleep() {
+#ifdef DEBUGBLOCKS
+    return 5;
+#endif
     uint16_t avg = 0;
     for (uint8_t c = 0; c < POWER_SAVING_SMOOTHING; c++) {
         avg += dataReqAttemptArr[c];
