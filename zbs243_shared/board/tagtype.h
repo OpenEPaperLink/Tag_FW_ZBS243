@@ -48,6 +48,37 @@
 	#define UI_152x152
 #endif
 
+#ifdef M2_ZBS_22_SSDVAR_BWR
+	// This is the 2.6" variety
+	#define EPD_SSDVAR
+	#define SCREEN_WIDTH				104
+	#define SCREEN_HEIGHT				212
+
+	#define EEPROM_IMG_EACH                         (0x02000UL)
+
+	#define HW_TYPE					        		SOLUM_M2_BWR_22
+
+	#define HAS_EEPROM 1
+	#define HAS_SCREEN 1
+	#define NFC_TYPE 1
+	#define UI_296x128
+#endif
+
+#ifdef M2_ZBS_26_SSDVAR_BWR
+	// This is the 2.6" variety
+	#define EPD_SSDVAR
+	#define SCREEN_WIDTH				152
+	#define SCREEN_HEIGHT				296
+
+	#define EEPROM_IMG_EACH                         (0x03000UL)
+
+	#define HW_TYPE					        		SOLUM_M2_BWR_26
+
+	#define HAS_EEPROM 1
+	#define HAS_SCREEN 1
+	#define NFC_TYPE 1
+	#define UI_296x128
+#endif
 
 #ifdef M2_ZBS_27_UCVAR_BWR
 	// This is the 2.7" variety
