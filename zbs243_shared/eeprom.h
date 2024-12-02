@@ -35,7 +35,7 @@ void eepromReadStart(uint32_t addr) __reentrant;
 //#define EEPROM_IMG_VALID (0x494d4721UL)
 #define EEPROM_IMG_VALID (0x474d4721UL)
 
-#include "board.h"
+#include "tagtype.h"
 
 struct EepromImageHeader {  // each image space is 0x17000 bytes, we have space for ten of them
     uint64_t version;
@@ -60,6 +60,13 @@ struct EepromImageHeader {  // each image space is 0x17000 bytes, we have space 
 // UNUSED: 0x12 to 0x1C
 #define CUSTOM_IMAGE_GPIO 0x1D
 #define CUSTOM_IMAGE_NFC_WAKE 0x1E
+
+
+
+
+#define eepromByte                              spiByte
+#define eepromPrvSelect()               do { __asm__("nop\nnop\nnop\n"); P1_1 = 0; __asm__("nop\nnop\nnop\n"); } while(0)
+#define eepromPrvDeselect()             do { __asm__("nop\nnop\nnop\n"); P1_1 = 1; __asm__("nop\nnop\nnop\n"); } while(0)
 
 
 

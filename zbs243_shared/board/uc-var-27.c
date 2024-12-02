@@ -1,16 +1,15 @@
-#include "uc8151.h"
+#include "uc-var-27.h"
 
 #include <stdbool.h>
 #include <string.h>
 
 #include "asmUtil.h"
 #include "barcode.h"
-#include "board.h"
+#include "tagtype.h"
 #include "cpu.h"
 #include "font.h"
 #include "lut.h"
 #include "printf.h"
-#include "screen.h"
 #include "settings.h"
 #include "sleep.h"
 #include "spi.h"

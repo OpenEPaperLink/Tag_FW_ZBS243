@@ -47,19 +47,6 @@ int8_t commsRxUnencrypted(void __xdata *data) {
     return rxedLen;
 }
 
-bool commsTxUnencrypted(const void __xdata *packetP, uint8_t len) {
-    const uint8_t __xdata *packet = (const uint8_t __xdata *)packetP;
-
-    if (len > COMMS_MAX_PACKET_SZ)
-        return false;
-    memset(mCommsBuf, 0, COMMS_MAX_PACKET_SZ);
-    xMemCopyShort(mCommsBuf + 1, packet, len);
-
-    mCommsBuf[0] = len + RADIO_PAD_LEN_BY;
-    
-    return radioTx(mCommsBuf);;
-}
-
 bool commsTxNoCpy(const void __xdata *packetp) {
    return radioTx(packetp);
 }

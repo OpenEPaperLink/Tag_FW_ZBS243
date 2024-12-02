@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdlib.h>
+
 #include "cpu.h"
 #include "i2c.h"
 #include "printf.h"
@@ -29,7 +31,6 @@ extern void dump(uint8_t* __xdata a, uint16_t __xdata l);  // remove me when don
 #ifndef LEAN_VERSION
 
 uint8_t __xdata i2cbuffer[18];
-extern uint8_t __xdata blockbuffer[];
 
 bool supportsNFCWake() {
     P1PULL |= (1 << 3);
@@ -64,7 +65,7 @@ void loadRawNTag(uint16_t blocksize) {
         i2ctrans.deviceAddr = (uint8_t)0x55 << 1;
         i2ctrans.bytes = i2cbuffer;
         i2cbuffer[0] = c + 1;
-        memcpy(i2cbuffer + 1, sizeof(struct blockData) + blockbuffer + (c * 16), 16);
+        //memcpy(i2cbuffer + 1, sizeof(struct blockData) + blockbuffer + (c * 16), 16);
         uint8_t res = i2cTransact(&i2ctrans, 1);
         timerDelay(133300);
     }
@@ -74,9 +75,9 @@ void loadURLtoNTag() {
     // https://learn.adafruit.com/adafruit-pn532-rfid-nfc/ndef << very helpful
 
     uint8_t __xdata i2cbuffer[18];
-    __xdata uint8_t* tempbuffer = blockbuffer + 2048;
+    __xdata uint8_t* tempbuffer = malloc(128);
 
-    strncpy(tempbuffer + 7, blockbuffer + sizeof(struct blockData), 245);
+    //strncpy(tempbuffer + 7, blockbuffer + sizeof(struct blockData), 245);
     uint8_t __xdata len = strlen(tempbuffer + 7);
     struct I2cTransaction __xdata i2ctrans;
 
@@ -107,6 +108,7 @@ void loadURLtoNTag() {
         uint8_t res = i2cTransact(&i2ctrans, 1);
         timerDelay(133300);
     }
+    free(tempbuffer);
 }
 
 void i2cBusScan() {

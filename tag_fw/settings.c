@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdlib.h>
+
 #include "asmUtil.h"
 #include "powermgt.h"
 #include "printf.h"
@@ -18,9 +20,7 @@
 
 #define SETTINGS_MAGIC 0xABBA5AA5
 
-struct tagsettings __xdata tagSettings = {0};
-extern uint8_t __xdata blockbuffer[];
-uint8_t* __xdata settingsTempBuffer = 1024 + blockbuffer;
+struct tagsettings __xdata tagSettings;
 
 void loadDefaultSettings() {
     tagSettings.settingsVer = SETTINGS_STRUCT_VERSION;
@@ -57,12 +57,13 @@ void loadSettingsFromBuffer(uint8_t* p) {
 
 static bool compareSettings() {
     // check if the settings match the settings in the eeprom
-    eepromRead(EEPROM_SETTINGS_AREA_START, (void*)settingsTempBuffer, sizeof(struct tagsettings));
-    if (memcmp((void*)settingsTempBuffer, (void*)tagSettings, sizeof(struct tagsettings)) == 0) {
-        // same
+    __xdata uint8_t* temp = malloc(sizeof(struct tagsettings));
+    eepromRead(EEPROM_SETTINGS_AREA_START, (void*)temp, sizeof(struct tagsettings));
+    if (memcmp((void*)temp, (void*)tagSettings, sizeof(struct tagsettings)) == 0) {
+        free(temp);
         return true;
     }
-    // different
+    free(temp);
     return false;
 }
 
@@ -71,11 +72,11 @@ static void upgradeSettings() {
 }
 
 void loadSettings() {
-    eepromRead(EEPROM_SETTINGS_AREA_START + 4, (void*)settingsTempBuffer, sizeof(struct tagsettings));
-    memcpy((void*)&tagSettings, (void*)settingsTempBuffer, sizeof(struct tagsettings));
+        __xdata uint8_t* temp = malloc(sizeof(struct tagsettings));
+    eepromRead(EEPROM_SETTINGS_AREA_START + 4, (void*)temp, sizeof(struct tagsettings));
     uint32_t __xdata valid = 0;
     eepromRead(EEPROM_SETTINGS_AREA_START, (void*)&valid, 4);
-    xMemCopy((void*)tagSettings, (void*)settingsTempBuffer, sizeof(struct tagsettings));
+    xMemCopy((void*)tagSettings, (void*)temp, sizeof(struct tagsettings));
     if (tagSettings.settingsVer == 0xFF || valid != SETTINGS_MAGIC) {
         // settings not set. load the defaults
         loadDefaultSettings();
@@ -96,6 +97,7 @@ void loadSettings() {
 #endif
         }
     }
+    free(temp);
 }
 
 void writeSettings() {
@@ -116,8 +118,8 @@ void writeSettings() {
 
 void invalidateSettingsEEPROM() {
     int32_t __xdata valid = 0x0000;
-    #ifdef DEBUGSETTINGS
+#ifdef DEBUGSETTINGS
     pr("SETTINGS: Invalidated settings in EEPROM\n");
-    #endif
+#endif
     eepromWrite(EEPROM_SETTINGS_AREA_START, (void*)&valid, 4);
 }

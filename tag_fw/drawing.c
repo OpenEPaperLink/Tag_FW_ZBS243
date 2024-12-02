@@ -3,28 +3,28 @@
 #include <stdbool.h>
 
 #include "asmUtil.h"
-#include "board.h"
 #include "cpu.h"
 #include "eeprom.h"
-#include "screen.h"
+#include "tagtype.h"
 #include "printf.h"
 #include "../shared/oepl-definitions.h"
-#include "screen.h"
 #include "timer.h"
-#include "userinterface.h"  // for addIcons
+#include "uicommon.h"  // for addIcons
 #include <stdlib.h>
-
-uint8_t __xdata* drawBuffer;
+#include "settings.h"
 
 void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
-    drawBuffer = malloc(512);
+#ifdef DEBUGDRAWING
+    pr("DRAW: Start\n");
+#endif
+    __xdata uint8_t* drawBuffer = malloc(512);
     if (!drawBuffer) {
 #ifdef DEBUGDRAWING
         pr("DRAW: malloc during draw failed..\n");
 #endif
         return;
     }
-    static struct EepromImageHeader* __xdata eih;
+    static __xdata struct EepromImageHeader* eih;
     eih = (struct EepromImageHeader*)drawBuffer;
     eepromRead(addr, drawBuffer, sizeof(struct EepromImageHeader));
     switch (eih->dataType) {
@@ -38,7 +38,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
             clearScreen();
 
             beginWriteFramebuffer(EPD_COLOR_BLACK);
-            #ifdef EPD_BYTEWISE_CS
+#ifdef EPD_BYTEWISE_CS
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
                     eepromRead(addr + sizeof(struct EepromImageHeader) + c, drawBuffer, 512);
@@ -47,7 +47,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
                 epdDeselect();
             }
-            #else
+#else
             epdSelect();
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
@@ -58,7 +58,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
             }
             epdDeselect();
-            #endif
+#endif
             endWriteFramebuffer();
 
             break;
@@ -69,9 +69,8 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
             if (lut) selectLUT(lut);
             beginFullscreenImage();
 
-
             beginWriteFramebuffer(EPD_COLOR_BLACK);
-            #ifdef EPD_BYTEWISE_CS
+#ifdef EPD_BYTEWISE_CS
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
                     eepromRead(addr + sizeof(struct EepromImageHeader) + c, drawBuffer, 512);
@@ -80,7 +79,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
                 epdDeselect();
             }
-            #else
+#else
             epdSelect();
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
@@ -91,11 +90,11 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
             }
             epdDeselect();
-            #endif
+#endif
             endWriteFramebuffer();
 
             beginWriteFramebuffer(EPD_COLOR_RED);
-            #ifdef EPD_BYTEWISE_CS
+#ifdef EPD_BYTEWISE_CS
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
                     eepromRead(addr + sizeof(struct EepromImageHeader) + (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)) + c, drawBuffer, 512);
@@ -104,7 +103,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
                 epdDeselect();
             }
-            #else
+#else
             epdSelect();
             for (uint16_t c = 0; c < (SCREEN_HEIGHT * (SCREEN_WIDTH / 8)); c++) {
                 if (c % 512 == 0) {
@@ -115,7 +114,7 @@ void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
                 epdSend(drawBuffer[c % 512]);
             }
             epdDeselect();
-            #endif
+#endif
             endWriteFramebuffer();
             break;
         default:  // prevent drawing from an unknown file image type
