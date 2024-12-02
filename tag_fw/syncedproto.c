@@ -658,16 +658,15 @@ static uint8_t decompressImageG5(const __xdata struct AvailDataInfo *avail, uint
     uint8_t decompressedSlot = findNextSlot(avail);
 #ifdef DEBUGG5DEC
     pr("G5: reading data from slot %d\n", compressedImgSlot);
-    pr("G5: decompressing %lu bytes\n", avail->dataSize);
 #endif
     powerUp(INIT_EEPROM);
 
-#define READBUFFERSIZE 1024
-#define MIN_REMAINING_READBUFFER 768
+#define READBUFFERSIZE 1024UL
+#define MIN_REMAINING_READBUFFER 256UL
     uint32_t readCurOffset = getAddressForSlot(compressedImgSlot) + sizeof(struct EepromImageHeader);
 
     __xdata uint8_t *readbuffer = malloc(READBUFFERSIZE);
-    __xdata uint8_t *writebuffer = malloc((SCREEN_WIDTH / 8) + 128);  // hmm.
+    __xdata uint8_t *writebuffer = malloc((SCREEN_WIDTH / 8) + 1);  // hmm.
 
     // start reading the first block
     eepromRead(readCurOffset, readbuffer, READBUFFERSIZE);
@@ -675,18 +674,24 @@ static uint8_t decompressImageG5(const __xdata struct AvailDataInfo *avail, uint
     uint16_t max_y = SCREEN_HEIGHT;
     if (avail->dataType == DATATYPE_IMG_G5_2BPP) max_y *= 2;  // we use double the height for the second color layer
 
-    __xdata G5DECIMAGE *g5dec = (__xdata G5DECIMAGE *)malloc(2880);//sizeof(G5DECIMAGE));  // max about 2600 bytes
+    __xdata G5DECIMAGE *g5dec = (__xdata G5DECIMAGE *)malloc(sizeof(G5DECIMAGE));  // max about 2600 bytes
     if (!g5dec) {
 #ifdef DEBUGG5DEC
         pr("G5: Failed to allocate g5 struct\n");
 #endif
     }
 
-    int rc = g5_decode_init(g5dec, SCREEN_WIDTH, max_y, readbuffer, avail->dataSize);
-    dump(readbuffer, 1024);
+    int rc = g5_decode_init(g5dec, SCREEN_WIDTH, max_y, readbuffer, READBUFFERSIZE);  //(int)avail->dataSize);
+    if (rc != G5_SUCCESS) {
+#ifdef DEBUGG5DEC
+        pr("G5: Failed to init: Error %d\n", rc);
+#endif
+    }
+
     for (uint16_t y = 0; y < max_y; y++) {
+        rc = g5_decode_line(g5dec, writebuffer);
         // check for highwater, load a new block if we're near the end of the buffer
-        if (g5dec->pBuf > (readbuffer + READBUFFERSIZE - MIN_REMAINING_READBUFFER)) {
+        if (((uint32_t)g5dec->pBuf) > ((uint32_t)readbuffer + (READBUFFERSIZE - MIN_REMAINING_READBUFFER))) {
 #ifdef DEBUGG5DEC
             pr("G5: Loading new compressed block\n");
 #endif
@@ -694,12 +699,12 @@ static uint8_t decompressImageG5(const __xdata struct AvailDataInfo *avail, uint
             readCurOffset += curBlockReadOffset;
             g5dec->pBuf = readbuffer;
             // load new block
+
             eepromRead(readCurOffset, readbuffer, READBUFFERSIZE);
             wdt10s();
         }
-        rc = g5_decode_line(g5dec, writebuffer);
         eepromWrite(getAddressForSlot(decompressedSlot) + sizeof(struct EepromImageHeader) + ((SCREEN_WIDTH / 8) * y), writebuffer, SCREEN_WIDTH / 8);
-        if((rc != G5_SUCCESS)&&(rc != G5_DECODE_COMPLETE)) {
+        if ((rc != G5_SUCCESS) && (rc != G5_DECODE_COMPLETE)) {
 #ifdef DEBUGG5DEC
             pr("G5: Error at line y=%d\n", y);
 #endif
@@ -997,10 +1002,7 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
 
     // check if we need to decompress a G5-compressed image
     if ((xferDataInfo.dataType == DATATYPE_IMG_G5_1BPP) || (xferDataInfo.dataType == DATATYPE_IMG_G5_2BPP)) {
-        // the G5 decompressor kinda wants the image size, we'll push that back into the xferData struct for a bit (was zero as the transfer was completed)
-        xferDataInfo.dataSize = imageSize;
         xferImgSlot = decompressImageG5(&xferDataInfo, xferImgSlot);
-        xferDataInfo.dataSize = 0;
     }
 
     return true;
