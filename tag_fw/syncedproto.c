@@ -671,8 +671,12 @@ static uint8_t decompressImageG5(const __xdata struct AvailDataInfo *avail, uint
     // start reading the first block
     eepromRead(readCurOffset, readbuffer, READBUFFERSIZE);
 
+    uint8_t imageHeaderSize = readbuffer[0];
+    uint8_t imageBpp = readbuffer[5];
+    if (imageBpp > 0x20) imageBpp -= 0x20;
+
     uint16_t max_y = SCREEN_HEIGHT;
-    if (avail->dataType == DATATYPE_IMG_G5_2BPP) max_y *= 2;  // we use double the height for the second color layer
+    if (imageBpp == 2) max_y *= 2;  // we use double the height for the second color layer
 
     __xdata G5DECIMAGE *g5dec = (__xdata G5DECIMAGE *)malloc(sizeof(G5DECIMAGE));  // max about 2600 bytes
     if (!g5dec) {
@@ -681,7 +685,7 @@ static uint8_t decompressImageG5(const __xdata struct AvailDataInfo *avail, uint
 #endif
     }
 
-    int rc = g5_decode_init(g5dec, SCREEN_WIDTH, max_y, readbuffer, READBUFFERSIZE);  //(int)avail->dataSize);
+    int rc = g5_decode_init(g5dec, SCREEN_WIDTH, max_y, readbuffer + imageHeaderSize, READBUFFERSIZE);  //(int)avail->dataSize);
     if (rc != G5_SUCCESS) {
 #ifdef DEBUGG5DEC
         pr("G5: Failed to init: Error %d\n", rc);
@@ -724,7 +728,7 @@ static uint8_t decompressImageG5(const __xdata struct AvailDataInfo *avail, uint
     eih->validMarker = EEPROM_IMG_VALID;
     eih->id = ++curHighSlotId;
     eih->size = avail->dataSize;  // THIS SHOULD BE UPDATED TO THE DECOMPRESSED SIZE! (but we don't really use this stuff anyway)
-    if (avail->dataType == DATATYPE_IMG_G5_1BPP) {
+    if (imageBpp == 1) {
         eih->dataType = DATATYPE_IMG_RAW_1BPP;
     } else {
         eih->dataType = DATATYPE_IMG_RAW_2BPP;
@@ -1001,7 +1005,7 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
     powerDown(INIT_EEPROM);
 
     // check if we need to decompress a G5-compressed image
-    if ((xferDataInfo.dataType == DATATYPE_IMG_G5_1BPP) || (xferDataInfo.dataType == DATATYPE_IMG_G5_2BPP)) {
+    if (xferDataInfo.dataType == DATATYPE_IMG_G5) {
         xferImgSlot = decompressImageG5(&xferDataInfo, xferImgSlot);
     }
 
@@ -1144,8 +1148,7 @@ bool processAvailDataInfo(__xdata struct AvailDataInfo *avail) __reentrant {
         case DATATYPE_IMG_DIFF:
         case DATATYPE_IMG_RAW_1BPP:
         case DATATYPE_IMG_RAW_2BPP:
-        case DATATYPE_IMG_G5_1BPP:
-        case DATATYPE_IMG_G5_2BPP:
+        case DATATYPE_IMG_G5:
             return processImageDataAvail(avail);
             break;
         case DATATYPE_FW_UPDATE:

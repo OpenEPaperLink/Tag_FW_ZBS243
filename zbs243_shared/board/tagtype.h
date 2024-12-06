@@ -53,6 +53,7 @@
 	#define EPD_SSDVAR
 	#define SCREEN_WIDTH				104
 	#define SCREEN_HEIGHT				212
+	#define CUSTOMLUTS
 
 	#define EEPROM_IMG_EACH                         (0x02000UL)
 
