@@ -499,7 +499,11 @@ void selectLUT(uint8_t lut) {
 }
 
 void setWindowX(uint16_t start, uint16_t end) {
+#ifdef XOFFSET8
+    shortCommand2(CMD_WINDOW_X_SIZE, 1+(start / 8), 1+(end / 8 - 1));
+#else
     shortCommand2(CMD_WINDOW_X_SIZE, start / 8, end / 8 - 1);
+#endif
 }
 void setWindowY(uint16_t start, uint16_t end) {
     commandBegin(CMD_WINDOW_Y_SIZE);
@@ -510,7 +514,11 @@ void setWindowY(uint16_t start, uint16_t end) {
     commandEnd();
 }
 void setPosXY(uint16_t x, uint16_t y) {
+    #ifdef XOFFSET8
+    shortCommand1(CMD_XSTART_POS, (uint8_t)1+(x / 8));
+#else
     shortCommand1(CMD_XSTART_POS, (uint8_t)(x / 8));
+#endif
     commandBegin(CMD_YSTART_POS);
     epdSend((y) & 0xff);
     epdSend((y) >> 8);

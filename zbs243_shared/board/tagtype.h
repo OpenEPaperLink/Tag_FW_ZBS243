@@ -14,6 +14,8 @@
 #define EEPROM_SETTINGS_AREA_LEN                (0x01000UL)
 #define EEPROM_IMG_START                        (0x01000UL)
 
+
+
 #ifdef M2_ZBS_16_SSDVAR_152_BWR
 	// This is the regular 1.54/1.6" 152x152 BWR M2 tag 0x341/0x343
 	#define EPD_SSDVAR
@@ -21,6 +23,23 @@
 	#define SCREEN_HEIGHT 152
 	#define CUSTOMLUTS
 
+	#define EEPROM_IMG_EACH                         (0x02000UL)
+
+	#define HW_TYPE                                 SOLUM_154_SSD1619
+
+	#define HAS_EEPROM 1
+	#define HAS_SCREEN 1
+	#define NFC_TYPE 1
+	#define UI_152x152
+#endif
+
+#ifdef M2_ZBS_16_SSDVAR2_152_BWR
+	// This is the regular 1.54/1.6" 152x152 BWR M2 tag 0x341/0x343, but with an 8-pixel offset on the side
+	#define EPD_SSDVAR
+	#define SCREEN_WIDTH 152
+	#define SCREEN_HEIGHT 152
+	#define CUSTOMLUTS
+	#define XOFFSET8
 	#define EEPROM_IMG_EACH                         (0x02000UL)
 
 	#define HW_TYPE                                 SOLUM_154_SSD1619
@@ -114,6 +133,25 @@
 	#define NFC_TYPE 1
 	#define UI_296x128
 #endif
+
+#ifdef M2_ZBS_29_SSDVAR2_BWR
+	// This is the regular 2.9" tag (296x128) BWR non-freezer type, with an 8-pixel offset
+	#define EPD_SSDVAR
+	#define SCREEN_WIDTH 128
+	#define SCREEN_HEIGHT 296
+	#define CUSTOMLUTS
+	#define XOFFSET8
+
+	#define EEPROM_IMG_EACH                         (0x03000UL)
+
+	#define HW_TYPE                                 SOLUM_29_SSD1619
+
+	#define HAS_EEPROM 1
+	#define HAS_SCREEN 1
+	#define NFC_TYPE 1
+	#define UI_296x128
+#endif
+
 
 #ifdef M2_ZBS_29_UCVAR_BWR
 	// This is the regular 2.9" (UC) tag (296x128) BWR non-freezer type
