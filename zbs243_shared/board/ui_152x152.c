@@ -251,24 +251,3 @@ void showNoEEPROM() {
 
     drawWithSleep();
 }
-
-void showNoMAC() {
-    selectLUT(EPD_LUT_NO_REPEATS);
-    clearScreen();
-    setColorMode(EPD_MODE_NORMAL, EPD_MODE_INVERT);
-
-    epdPrintBegin(20, 0, EPD_DIRECTION_X, EPD_SIZE_DOUBLE, EPD_COLOR_BLACK);
-    epdpr("NO MAC");
-    epdPrintEnd();
-    epdPrintBegin(30, 32, EPD_DIRECTION_X, EPD_SIZE_DOUBLE, EPD_COLOR_BLACK);
-    epdpr("SET :(");
-    epdPrintEnd();
-#ifndef LEAN_VERSION
-    loadRawBitmap(failed, 60, 72, EPD_COLOR_RED);
-#endif
-    epdPrintBegin(3, 136, EPD_DIRECTION_X, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
-    epdpr("Sleeping forever :'(");
-    epdPrintEnd();
-
-    drawWithSleep();
-}

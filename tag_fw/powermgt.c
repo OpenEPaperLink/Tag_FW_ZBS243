@@ -267,6 +267,7 @@ void powerDown(const uint8_t parts) {
 }
 
 void doSleep(const uint32_t __xdata t) {
+
     P0FUNC = 0;
     P1FUNC = 0;
     P2FUNC = 0;
@@ -276,11 +277,8 @@ void doSleep(const uint32_t __xdata t) {
     P0PULL = 1;
 
     P1DIR = 0x86;
+    //P1 = 0;
     P1PULL = 0x86;
-
-    // P1DIR = 0xF6;
-    // P1 = 0;
-    // P1PULL = 0xF6;
 
     P2DIR = 7;
     P2 = 0;
@@ -417,7 +415,7 @@ void addAverageValue() {
 
 uint16_t getNextSleep() {
 #ifdef DEBUGBLOCKS
-    return 5;
+    return 7;
 #endif
     uint16_t avg = 0;
     for (uint8_t c = 0; c < POWER_SAVING_SMOOTHING; c++) {

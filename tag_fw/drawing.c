@@ -12,6 +12,7 @@
 #include "uicommon.h"  // for addIcons
 #include <stdlib.h>
 #include "settings.h"
+#include "tagtype.h"
 
 void drawImageAtAddress(uint32_t addr, uint8_t lut) __reentrant {
 #ifdef DEBUGDRAWING

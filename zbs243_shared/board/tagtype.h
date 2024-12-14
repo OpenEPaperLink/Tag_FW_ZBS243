@@ -103,6 +103,7 @@
 #ifdef M2_ZBS_27_UCVAR_BWR
 	// This is the 2.7" variety
 	#define EPD_UCVAR27
+	//#define EPD_UCVAR29
 	#define SCREEN_WIDTH				176
 	#define SCREEN_HEIGHT				264
 
@@ -114,6 +115,7 @@
 	#define HAS_SCREEN 1
 	#define NFC_TYPE 1
 	#define UI_264x176
+	#define EPD_BYTEWISE_CS
 #endif
 
 

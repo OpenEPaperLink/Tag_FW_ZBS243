@@ -114,6 +114,17 @@ void displayLoop() {
 
 #endif
 
+void writeRandomMac() {
+    for (__xdata uint8_t c = 0; c < 8; c++) {
+        mSelfMac[c] = rndGen8();
+    }
+    __xdata uint8_t *temp = (__xdata uint8_t *)malloc(1024);
+    memcpy((__xdata void *)(temp + 0x0010), (__xdata void *)mSelfMac, 8);
+    flashErase(FLASH_INFOPAGE_ADDR + 1);
+    flashWrite(FLASH_INFOPAGE_ADDR, (void *)temp, 1024, false);
+    free(temp);
+}
+
 #ifdef WRITE_MAC_FROM_FLASH
 void writeInfoPageWithMac() {
     uint8_t *settemp = blockbuffer + 2048;
@@ -172,6 +183,8 @@ uint8_t channelSelect(uint8_t rounds) __reentrant {  // returns 0 if no accesspo
     for (uint8_t i = 0; i < rounds; i++) {
         for (uint8_t c = 0; c < sizeof(channelList); c++) {
             if (detectAP(channelList[c])) {
+                rndSeedShiftIn(mLastLqi);
+                rndSeedShiftIn(mLastRSSI);
                 if (mLastLqi > result[c]) result[c] = mLastLqi;
 #ifdef DEBUGMAIN
                 if (rounds > 2) pr("MAIN: Channel: %d - LQI: %d RSSI %d\n", channelList[c], mLastLqi, mLastRSSI);
@@ -193,22 +206,12 @@ uint8_t channelSelect(uint8_t rounds) __reentrant {  // returns 0 if no accesspo
     return highestSlot;
 }
 
-void validateMacAddress() {
+bool validateMacAddress() {
     // check if the mac contains at least some non-0xFF values
     for (__xdata uint8_t c = 0; c < 8; c++) {
-        if (mSelfMac[c] != 0xFF) goto macIsValid;
+        if (mSelfMac[c] != 0xFF) return true;
     }
-// invalid mac address. Display warning screen and sleep forever
-#ifdef DEBUGMAIN
-    pr("Mac can't be all FF's.\n");
-#endif
-    powerUp(INIT_EPD);
-    showNoMAC();
-    powerDown(INIT_EPD | INIT_UART | INIT_EEPROM);
-    doSleep(-1);
-    wdtDeviceReset();
-macIsValid:
-    return;
+    return false;
 }
 uint8_t getFirstWakeUpReason() {
     if (RESET & 0x01) {
@@ -650,7 +653,7 @@ void MemTest51() {
         __xdata uint8_t *test = malloc(c);
         if (!test) {
             pr("\n");
-            if(c == MEMTESTSTART)pr("Failed to allocate %d bytes\n", c);
+            if (c == MEMTESTSTART) pr("Failed to allocate %d bytes\n", c);
             return;
         } else {
             pr("\rAllocated %d bytes... ", c);
@@ -674,7 +677,6 @@ void main() {
     // Find the reason why we're booting; is this a WDT?
     wakeUpReason = getFirstWakeUpReason();
 
-    // dump(blockbuffer, 1024);
     //  get our own mac address. this is stored in Infopage at offset 0x10-onwards
     boardGetOwnMac(mSelfMac);
 
@@ -697,6 +699,8 @@ void main() {
     loadSettings();
     // invalidate the settings, and write them back in a later state
     invalidateSettingsEEPROM();
+
+
 
 #ifdef WRITE_MAC_FROM_FLASH
     if (mSelfMac[7] == 0xFF && mSelfMac[6] == 0xFF) {
@@ -760,8 +764,6 @@ void main() {
 #ifdef DEBUGMAIN
         pr("Normal boot\n");
 #endif
-        // validate the mac address; this will display a warning on the screen if the mac address is invalid
-        validateMacAddress();
 
 #ifndef LEAN_VERSION
     #if (NFC_TYPE == 1)
@@ -803,13 +805,16 @@ void main() {
 #ifdef DEBUGMAIN
         pr("MAIN: Ap Found!\n");
 #endif
-        // showNoAP();
+
+        // if we're here, we should have enough entropy to program a mac if needed
+        if (!validateMacAddress()) writeRandomMac();
 
         showAPFound();
         // write the settings to the eeprom
         powerUp(INIT_EEPROM);
         writeSettings();
         powerDown(INIT_EEPROM);
+
 
         initPowerSaving(INTERVAL_BASE);
         currentTagMode = TAG_MODE_ASSOCIATED;

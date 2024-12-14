@@ -200,27 +200,46 @@ struct waveform* __xdata waveform7 = (struct waveform*)waveformbuffer;       // 
 #pragma callee_saves epdBusySleep
 #pragma callee_saves epdBusyWait
 static void epdBusySleep(uint32_t timeout) {
-    uint8_t tmp_P2FUNC = P2FUNC;
-    uint8_t tmp_P2DIR = P2DIR;
-    uint8_t tmp_P2PULL = P2PULL;
-    uint8_t tmp_P2LVLSEL = P2LVLSEL;
-    P2FUNC &= 0xfd;
-    P2DIR |= 2;
-    P2PULL |= 2;
-    P2LVLSEL &= ~(2);
+    uint8_t __xdata save[3];
 
-    P2CHSTA &= 0xfd;
-    P2INTEN |= 2;
-    P2CHSTA &= 0xfd;
-    sleepForMsec(timeout);
+    save[0] = P0DIR;
+    save[1] = P1DIR;
+    save[2] = P2DIR;
+
+    P0DIR = 0;
+    P0 = 0;
+    P0PULL = 0;
+    P1DIR = 0x82;
+    P1 = 0;
+    P1PULL = 0x82;
+    P2DIR = 3;
+    P2 = 0;
+    P2PULL = 1;
+
+    P2FUNC &= 0xFD;
+    P2DIR |= 0x02;
+    P2PULL &= 0xFD;
+    P2LVLSEL &= 0xFD;
+    P2CHSTA &= 0xFD;
+    P2INTEN |= 0x02;
+    P2CHSTA &= 0xFD;
+
+    sleepForMsec(TIMER_TICKS_PER_SECOND * timeout);
     wdtOn();
-    P2CHSTA &= 0xfd;
-    P2INTEN &= 0xfd;
 
-    P2FUNC = tmp_P2FUNC;
-    P2DIR = tmp_P2DIR;
-    P2PULL = tmp_P2PULL;
-    P2LVLSEL = tmp_P2LVLSEL;
+    P2CHSTA &= 0xFD;
+    P2INTEN &= 0xFD;
+
+    P2_0 = 1;
+    P0FUNC &= 0xF7;
+    P0_3 = 1;
+    P0PULL |= 0x07;
+    CLKEN |= 8;
+    P1_7 = 1;
+
+    P2DIR = save[2];
+    P1DIR = save[1];
+    P0DIR = save[0];
     eepromPrvDeselect();
 }
 static void epdBusyWait(uint32_t timeout) {
@@ -233,8 +252,7 @@ static void epdBusyWait(uint32_t timeout) {
 #ifdef DEBUGEPD
     pr("screen timeout %lu ticks :(\n", timerGet() - start);
 #endif
-    while (1)
-        ;
+    while (1);
 }
 
 static void epdWaitUntilBusy(uint32_t timeout) {
@@ -247,8 +265,7 @@ static void epdWaitUntilBusy(uint32_t timeout) {
 #ifdef DEBUGEPD
     pr("Waited until the EPD would start doing anything, timeout %lu ticks :(\n", timerGet() - start);
 #endif
-    while (1)
-        ;
+    while (1);
 }
 
 static void commandReadBegin(uint8_t cmd) {
@@ -311,6 +328,22 @@ static void commandBegin(uint8_t cmd) {
     spiTXByte(cmd);
     markData();
 }
+void epdWrite(uint8_t reg, uint8_t len, ...) {
+    va_list valist;
+    va_start(valist, len);
+    markCommand();
+    epdSelect();
+    epdSend(reg);
+    epdDeselect();
+    markData();
+    for (uint8_t i = 0; i < len; i++) {
+        epdSelect();
+        epdSend(va_arg(valist, int));
+        epdDeselect();
+    }
+    va_end(valist);
+}
+
 static void epdReset() {
     timerDelay(TIMER_TICKS_PER_SECOND / 1000);
     P2_0 = 0;
@@ -319,17 +352,18 @@ static void epdReset() {
     epdBusyWait(133300);
     timerDelay(TIMER_TICKS_PER_SECOND / 1000);
 }
+
 void epdConfigGPIO(bool setup) {
     // data / _command: 2.2
     // busy             2.1
-    // reset            2.0
+    // _reset            2.0
     // _select          1.7
     // bs1              1.2
 
     // GENERIC SPI BUS PINS
     // spi.clk          0.0
     // spi.mosi         0.1
-    if (epdGPIOActive == setup) return;
+    // if (epdGPIOActive == setup) return;
     if (setup) {
         pr("EPD: configuring GPIO\n");
         P2DIR |= (1 << 1);                // busy as input
@@ -346,29 +380,34 @@ void epdConfigGPIO(bool setup) {
     }
     epdGPIOActive = setup;
 }
+
 void epdEnterSleep() {
     pr("EPD Entering sleep\n");
-    timerDelay(20 * TIMER_TICKS_PER_MS);
-    epdReset();
-    timerDelay(20 * TIMER_TICKS_PER_MS);
-    shortCommand1(CMD_DEEP_SLEEP, 0xA5);
-    isInited = false;
-}
-
-void epdWrite(uint8_t reg, uint8_t len, ...) {
-    va_list valist;
-    va_start(valist, len);
-    markCommand();
-    epdSelect();
-    epdSend(reg);
-    epdDeselect();
-    markData();
-    for (uint8_t i = 0; i < len; i++) {
-        epdSelect();
-        epdSend(va_arg(valist, int));
-        epdDeselect();
+    // timerDelay(20 * TIMER_TICKS_PER_MS);
+    // epdReset();
+    timerDelay(5 * TIMER_TICKS_PER_MS);
+    for (uint8_t c = 0; c < 50; c++) {
+        pr("attempt %d\n", c);
+        if (P2_1) {
+            pr("1busy high\n");
+        } else {
+            pr("1busy low\n");
+        }
+        epdWrite(CMD_DEEP_SLEEP, 1, 0xA5);
+        if (P2_1) {
+            pr("2busy high\n");
+        } else {
+            pr("2busy low\n");
+        }
+        timerDelay(50 * TIMER_TICKS_PER_MS);
+        if (P2_1) {
+            pr("3busy high\n");
+        } else {
+            pr("3busy low\n");
+        }
+        if (!P2_1) break;
     }
-    va_end(valist);
+    isInited = false;
 }
 
 static void epdDrawDirection(bool direction) {
@@ -405,9 +444,9 @@ void epdSetup() {
     // epdWrite(0x50, 1, 0x57); <<- this is the stock init
 
     shortCommand(CMD_POWER_ON);
-    epdWaitUntilBusy(133300);
-    epdWaitRdy();
-    timerDelay(1333 * 5);
+    epdWaitUntilBusy(1333);
+    epdBusySleep(2);
+    //epdBusyWait(TIMER_TICKS_PER_SECOND * 1);
     pr("EPD: setup complete\n");
 }
 static uint8_t epdGetStatus() {
@@ -532,37 +571,15 @@ void drawWithSleep() {
 
     epdWaitUntilBusy(1333000);
 
-    uint8_t tmp_P2FUNC = P2FUNC;
-    uint8_t tmp_P2DIR = P2DIR;
-    uint8_t tmp_P2PULL = P2PULL;
-    uint8_t tmp_P2LVLSEL = P2LVLSEL;
-    P2FUNC &= 0xfd;
-    P2DIR |= 2;
-    P2PULL |= 2;
-    P2LVLSEL &= ~(2);
+    epdBusySleep(120);
 
-    P2CHSTA &= 0xfd;
-    P2INTEN = 2;
-    P2CHSTA &= 0xfd;
-    sleepForMsec(TIMER_TICKS_PER_SECOND * 120);
-    wdtOn();
-    P2CHSTA &= 0xfd;
-    P2INTEN &= 0xfd;
-
-    P2FUNC = tmp_P2FUNC;
-    P2DIR = tmp_P2DIR;
-    P2PULL = tmp_P2PULL;
-    P2LVLSEL = tmp_P2LVLSEL;
     eepromPrvDeselect();
-    timerDelay(133300);
 }
 void epdWaitRdy() {
     epdBusyWait(TIMER_TICKS_PER_SECOND * 120);
     timerDelay(133300);
 }
 void beginFullscreenImage() {
-    //drawDirection = true;
-    // epdDrawDirection(false);
 }
 void beginWriteFramebuffer(bool color) {
     if (color == EPD_COLOR_RED) {
@@ -665,12 +682,6 @@ static void pushXFontBytesToEPD(uint8_t byte1, uint8_t byte2) {
     }
 }
 static void bufferByteShift(uint8_t byte) {
-    /*
-                rbuffer[0] = 0;   // previous value
-                rbuffer[1] = y%8; // offset
-                rbuffer[2] = 0;   // current byte counter;
-                rbuffer[3] = 1+(epdCharsize*2);
-    */
 
     if (rbuffer[1] == 0) {
         epdSelect();

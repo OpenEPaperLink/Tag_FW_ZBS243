@@ -38,6 +38,8 @@ void epdEnterSleep();
 uint16_t epdGetBattery();
 void epdConfigGPIO(bool setup);
 
+void epdShortInitTest();
+
 extern bool __xdata epdGPIOActive;
 
 void setColorMode(uint8_t red, uint8_t bw) ;

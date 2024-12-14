@@ -806,14 +806,14 @@ __xdata uint8_t *getDataBlock(const uint16_t blockSize) {
             if (ack->pleaseWaitMs < 35) {
                 timerDelay(ack->pleaseWaitMs * TIMER_TICKS_PER_MS);
             } else {
-                doSleep(ack->pleaseWaitMs - 10);
+                doSleep(ack->pleaseWaitMs - 15);
                 powerUp(INIT_UART | INIT_RADIO);
                 radioRxEnable(true, true);
             }
         } else {
             // immediately start with the reception of the block data
         }
-        blockRxLoop(290, blockbuffer);  // BLOCK RX LOOP - receive a block, until the timeout has passed
+        blockRxLoop(295, blockbuffer);  // BLOCK RX LOOP - receive a block, until the timeout has passed
         powerDown(INIT_RADIO);
 
 #ifdef DEBUGBLOCKS

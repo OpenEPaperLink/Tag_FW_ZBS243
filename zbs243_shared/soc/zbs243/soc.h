@@ -20,6 +20,9 @@ uint32_t rndGen32(void);
 #pragma callee_saves rndSeed
 void rndSeed(uint8_t seedA, uint8_t seedB);
 
+#pragma callee_saves rndSeedShiftIn
+void rndSeedShiftIn(uint8_t seed);
+
 #pragma callee_saves selfUpdate
 void selfUpdate(void);
 
