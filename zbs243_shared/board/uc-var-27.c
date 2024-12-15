@@ -383,30 +383,8 @@ void epdConfigGPIO(bool setup) {
 
 void epdEnterSleep() {
     pr("EPD Entering sleep\n");
-    // timerDelay(20 * TIMER_TICKS_PER_MS);
-    // epdReset();
     timerDelay(5 * TIMER_TICKS_PER_MS);
-    for (uint8_t c = 0; c < 50; c++) {
-        pr("attempt %d\n", c);
-        if (P2_1) {
-            pr("1busy high\n");
-        } else {
-            pr("1busy low\n");
-        }
-        epdWrite(CMD_DEEP_SLEEP, 1, 0xA5);
-        if (P2_1) {
-            pr("2busy high\n");
-        } else {
-            pr("2busy low\n");
-        }
-        timerDelay(50 * TIMER_TICKS_PER_MS);
-        if (P2_1) {
-            pr("3busy high\n");
-        } else {
-            pr("3busy low\n");
-        }
-        if (!P2_1) break;
-    }
+    epdWrite(CMD_DEEP_SLEEP, 1, 0xA5);
     isInited = false;
 }
 
