@@ -58,7 +58,7 @@ static __xdata bool secondLongCheckIn = false;  // send another full request if 
 
 #ifdef DEBUGGUI
 void displayLoop() {
-    powerUp(INIT_BASE | INIT_UART);
+  //  powerUp(INIT_BASE | INIT_UART | INIT_EEPROM);
 
     pr("Splash screen\n");
     powerUp(INIT_EPD);
@@ -104,13 +104,13 @@ void displayLoop() {
     showNoEEPROM();
     timerDelay(TIMER_TICKS_PER_SECOND * 4);
 
-    wdt30s();
-
-    pr("NO MAC\n");
+    pr("afterFlash\n");
     powerUp(INIT_EPD);
-    showNoMAC();
+    afterFlashScreenSaver();
     timerDelay(TIMER_TICKS_PER_SECOND * 4);
-    wdtDeviceReset();
+
+
+    wdt30s();
 }
 
 #endif
@@ -726,10 +726,6 @@ void main() {
     powerUp(INIT_BASE | INIT_UART);
     pr("BOOTED> %04X%s\n", fwVersion, fwVersionSuffix);
 
-#ifdef DEBUGGUI
-    displayLoop();
-#endif
-
     // Find the reason why we're booting; is this a WDT?
     wakeUpReason = getFirstWakeUpReason();
 
@@ -832,6 +828,9 @@ void main() {
 
         // show the splashscreen
         currentChannel = 11;
+        #ifdef DEBUGGUI
+//    displayLoop();
+#endif
         showSplashScreen();
         currentChannel = 0;
 

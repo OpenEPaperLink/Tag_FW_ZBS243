@@ -94,7 +94,7 @@
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
 	#define NFC_TYPE 1
-	#define UI_296x128
+	#define UI_212x104
 #endif
 
 #ifdef M2_ZBS_26_SSDVAR_BWR
