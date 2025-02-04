@@ -76,12 +76,16 @@ void showSplashScreen() {
     epdPrintEnd();
 #endif
 
-    epdPrintBegin(64, 295, EPD_DIRECTION_Y, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
+    epdPrintBegin(56, 295, EPD_DIRECTION_Y, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
     addCapabilities();
     epdPrintEnd();
 
-    epdPrintBegin(80, 295, EPD_DIRECTION_Y, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
-    epdpr("zbs29 %04X%s", fwVersion, fwVersionSuffix);
+    epdPrintBegin(72, 280, EPD_DIRECTION_Y, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
+    epdpr(HW_STRING);
+    epdPrintEnd();
+
+    epdPrintBegin(88, 280, EPD_DIRECTION_Y, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
+    epdpr("%04X%s", fwVersion, fwVersionSuffix);
     epdPrintEnd();
 
     epdPrintBegin(105, 270, EPD_DIRECTION_Y, EPD_SIZE_SINGLE, EPD_COLOR_RED);

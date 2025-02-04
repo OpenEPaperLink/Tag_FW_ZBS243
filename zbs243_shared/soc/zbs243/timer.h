@@ -17,7 +17,7 @@ uint32_t timerGet(void);
 #pragma callee_saves timerGetLowBits
 uint8_t timerGetLowBits(void);	//probaly only useful for random seeds
 
-void timerDelay(uint32_t ticks);
+void timerDelay(uint32_t ticks) __reentrant;
 
 
 

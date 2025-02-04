@@ -231,12 +231,6 @@ void showLongTermSleep() {
     selectLUT(EPD_LUT_NO_REPEATS);
     setColorMode(EPD_MODE_NORMAL, EPD_MODE_INVERT);
     clearScreen();
-
-    epdPrintBegin(2, SCREEN_HEIGHT - 16, EPD_DIRECTION_X, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
-    epdpr("zZ");
-    epdPrintEnd();
-
-    addOverlay();
     drawWithSleep();
 }
 void showNoEEPROM() {

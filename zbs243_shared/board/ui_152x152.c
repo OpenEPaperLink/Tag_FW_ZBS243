@@ -98,12 +98,13 @@ void showSplashScreen() {
     epdpr("%02X%02X", mSelfMac[1], mSelfMac[0]);
     epdPrintEnd();
 
-    epdPrintBegin(2, 104, EPD_DIRECTION_X, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
-    addCapabilities();
+    epdPrintBegin(1, 104, EPD_DIRECTION_X, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
+    epdpr(HW_STRING);
     epdPrintEnd();
 
     epdPrintBegin(2, 120, EPD_DIRECTION_X, EPD_SIZE_SINGLE, EPD_COLOR_BLACK);
-    epdpr("zbs154 %04X%s", fwVersion, fwVersionSuffix);
+    epdpr("%04X%s", fwVersion, fwVersionSuffix);
+    addCapabilities();
     epdPrintEnd();
 
 #ifdef ISDEBUGBUILD

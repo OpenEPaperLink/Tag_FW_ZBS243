@@ -3,7 +3,7 @@ import subprocess
 # This code finds parts that use iram
 
 # Run the "find . | grep .lst" command to get list of .lst files
-result = subprocess.run("find . -name '*.lst'", shell=True, text=True, capture_output=True)
+result = subprocess.run("find -L . -name '*.lst'", shell=True, text=True, capture_output=True)
 list_files = result.stdout.splitlines()
 
 print("Files with data in internal memory:")

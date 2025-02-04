@@ -178,6 +178,8 @@ enum PLL_FLAGS {
         P2_2 = 1;  \
     } while (0)
 
+#define EPD_RESET_MAX 220
+
 extern void dump(uint8_t* __xdata a, uint16_t __xdata l);  // remove me when done
 
 static uint8_t __xdata epdCharSize = 1;   // character size, 1 or 2 (doubled)
@@ -198,7 +200,6 @@ struct waveform10* __xdata waveform10 = (struct waveform10*)waveformbuffer;  // 
 struct waveform* __xdata waveform7 = (struct waveform*)waveformbuffer;       // holds the LUT/waveform
 
 #pragma callee_saves epdBusySleep
-#pragma callee_saves epdBusyWait
 static void epdBusySleep(uint32_t timeout) {
     uint8_t __xdata save[3];
 
@@ -242,116 +243,9 @@ static void epdBusySleep(uint32_t timeout) {
     P0DIR = save[0];
     eepromPrvDeselect();
 }
-static void epdBusyWait(uint32_t timeout) {
-    uint32_t __xdata start = timerGet();
 
-    while (timerGet() - start < timeout) {
-        if (P2_1)
-            return;
-    }
-#ifdef DEBUGEPD
-    pr("screen timeout %lu ticks :(\n", timerGet() - start);
-#endif
-    while (1);
-}
 
-static void epdWaitUntilBusy(uint32_t timeout) {
-    uint32_t __xdata start = timerGet();
-
-    while (timerGet() - start < timeout) {
-        if (!P2_1)
-            return;
-    }
-#ifdef DEBUGEPD
-    pr("Waited until the EPD would start doing anything, timeout %lu ticks :(\n", timerGet() - start);
-#endif
-    while (1);
-}
-
-static void commandReadBegin(uint8_t cmd) {
-    epdSelect();
-    markCommand();
-    spiByte(cmd);  // dump LUT
-
-    P0DIR = (P0DIR & ~(1 << 0)) | (1 << 1);
-    P0 &= ~(1 << 0);
-    P0FUNC &= ~((1 << 0) | (1 << 1));
-    P2_2 = 1;
-}
-static void commandReadEnd() {
-    // set up pins for spi (0.0,0.1,0.2)
-    P0FUNC |= (1 << 0) | (1 << 1);
-    epdDeselect();
-}
-#pragma callee_saves epdReadByte
-static uint8_t epdReadByte() {
-    uint8_t val = 0, i;
-
-    for (i = 0; i < 8; i++) {
-        P0_0 = 1;
-        __asm__("nop\nnop\nnop\nnop\nnop\nnop\n");
-        val <<= 1;
-        if (P0_1)
-            val++;
-        P0_0 = 0;
-        __asm__("nop\nnop\nnop\nnop\nnop\nnop\n");
-    }
-
-    return val;
-}
-static void shortCommand(uint8_t cmd) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    epdDeselect();
-}
-static void shortCommand1(uint8_t cmd, uint8_t arg) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    markData();
-    spiTXByte(arg);
-    epdDeselect();
-}
-static void shortCommand2(uint8_t cmd, uint8_t arg1, uint8_t arg2) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    markData();
-    spiTXByte(arg1);
-    spiTXByte(arg2);
-    epdDeselect();
-}
-static void commandBegin(uint8_t cmd) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    markData();
-}
-void epdWrite(uint8_t reg, uint8_t len, ...) {
-    va_list valist;
-    va_start(valist, len);
-    markCommand();
-    epdSelect();
-    epdSend(reg);
-    epdDeselect();
-    markData();
-    for (uint8_t i = 0; i < len; i++) {
-        epdSelect();
-        epdSend(va_arg(valist, int));
-        epdDeselect();
-    }
-    va_end(valist);
-}
-
-static void epdReset() {
-    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
-    P2_0 = 0;
-    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
-    P2_0 = 1;
-    epdBusyWait(133300);
-    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
-}
+#include "inc_epd_lowlevel.c"
 
 void epdConfigGPIO(bool setup) {
     // data / _command: 2.2
@@ -365,14 +259,18 @@ void epdConfigGPIO(bool setup) {
     // spi.mosi         0.1
     // if (epdGPIOActive == setup) return;
     if (setup) {
+#ifdef DEBUGEPD
         pr("EPD: configuring GPIO\n");
+#endif
         P2DIR |= (1 << 1);                // busy as input
         P2DIR &= ~((1 << 2) | (1 << 0));  // D/C and Reset as output
         P1DIR &= ~((1 << 7) | (1 << 2));  // select and bs1 as output
         P1_2 = 0;                         // select 4-wire SPI / BS1 = low
         P1_7 = 1;                         // deselect EPD
     } else {
+#ifdef DEBUGEPD
         pr("EPD: Deconfiguring GPIO\n");
+#endif
         P2DIR |= ((1 << 2) | (1 << 0));  // DC and Reset as input
         P2 &= ~((1 << 2) | (1 << 0));
         P1DIR |= ((1 << 7) | (1 << 2));  // Select and BS1 as input
@@ -382,7 +280,9 @@ void epdConfigGPIO(bool setup) {
 }
 
 void epdEnterSleep() {
-    pr("EPD Entering sleep\n");
+#ifdef DEBUGEPD
+    pr("EPD: Entering sleep\n");
+#endif
     timerDelay(5 * TIMER_TICKS_PER_MS);
     epdWrite(CMD_DEEP_SLEEP, 1, 0xA5);
     isInited = false;
@@ -403,7 +303,9 @@ static void epdDrawDirection(bool direction) {
 }
 
 void epdSetup() {
+#ifdef DEBUGEPD
     pr("EPD: Start setup\n");
+#endif
     epdReset();
 
     epdWrite(0x06, 3, 0x07, 0x07, 0x17);
@@ -414,18 +316,17 @@ void epdSetup() {
     epdWrite(0xF8, 2, 0xA0, 0xA5);
     epdWrite(0xF8, 2, 0xA1, 0x00);
     epdWrite(0xF8, 2, 0x73, 0x41);
-    // epdWrite(0x00, 1, 0x07); <<- stock init
     drawDirection = true;
     epdDrawDirection(false);
     epdWrite(0x16, 1, 0x00);
     epdWrite(0x50, 1, 0x87);
-    // epdWrite(0x50, 1, 0x57); <<- this is the stock init
 
-    shortCommand(CMD_POWER_ON);
+    epdWrite(CMD_POWER_ON,0);
     epdWaitUntilBusy(1333);
     epdBusySleep(2);
-    //epdBusyWait(TIMER_TICKS_PER_SECOND * 1);
+#ifdef DEBUGEPD
     pr("EPD: setup complete\n");
+#endif
 }
 static uint8_t epdGetStatus() {
     uint8_t sta;
@@ -474,10 +375,10 @@ void setWindowXY(uint16_t xstart, uint16_t xend, uint16_t ystart, uint16_t yend)
 
 void startWindow(bool color) {
     if (color) {
-        shortCommand(0x15);
+        epdWrite(0x15,0);
         markData();
     } else {
-        shortCommand(0x14);
+        epdWrite(0x14,0);
         markData();
     }
     epdSelect();
@@ -520,41 +421,42 @@ void setColorMode(uint8_t red, uint8_t bw) {
     return;
 }
 void clearScreen() {
-    // shortCommand(CMD_PARTIAL_OUT);
-    commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM2);
+    epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM2,0);
     for (uint16_t c = 0; c < ((1UL * SCREEN_HEIGHT * SCREEN_WIDTH) / 2); c++) {
         epdSelect();
         epdSend(0x00);
         epdDeselect();
     }
-    commandEnd();
+    epdSelect();
+    epdSend(0x00);
+    epdDeselect();
     epdWaitRdy();
-    commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM1);
+    epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM1,0);
     for (uint16_t c = 0; c < ((1UL * SCREEN_HEIGHT * SCREEN_WIDTH) / 2); c++) {
         epdSelect();
         epdSend(0x00);
         epdDeselect();
     }
+    epdSelect();
+    epdSend(0x00);
+    epdDeselect();
 }
 void draw() {
-    shortCommand(CMD_DISPLAY_REFRESH);
+    drawNoWait();
     epdWaitRdy();
     timerDelay(133300);
 }
 void drawNoWait() {
-    shortCommand(CMD_DISPLAY_REFRESH);
+    epdWrite(CMD_DISPLAY_REFRESH,0);
 }
 void drawWithSleep() {
-    shortCommand(CMD_DISPLAY_REFRESH);
-
-    epdWaitUntilBusy(1333000);
-
+    drawNoWait();
+    epdWaitUntilBusy(133300);
     epdBusySleep(120);
-
     eepromPrvDeselect();
 }
 void epdWaitRdy() {
-    epdBusyWait(TIMER_TICKS_PER_SECOND * 120);
+    epdBusyWait(TIMER_TICKS_PER_SECOND * 50);
     timerDelay(133300);
 }
 void beginFullscreenImage() {
@@ -570,15 +472,10 @@ void endWriteFramebuffer() {
 }
 
 void loadRawBitmap(uint8_t* bmp, uint16_t x, uint16_t y, bool color) __reentrant {
-    // this function is very badly hurt by the switch to UC8151, taking up LOTS of valuable idata space. Only defining variables
-    // as static, or the function as reentrant (relegating variables to the stack) seemed to fix the idata issue. Fix me, or put me out of my misery...
-
     uint16_t xsize = bmp[0] / 8;
     if (bmp[0] % 8) xsize++;
     uint16_t ysize = bmp[1];
     uint16_t size = xsize * bmp[1];
-
-    // shortCommand1(CMD_DATA_ENTRY_MODE, 3);
 
     bmp += 2;
 
@@ -660,7 +557,6 @@ static void pushXFontBytesToEPD(uint8_t byte1, uint8_t byte2) {
     }
 }
 static void bufferByteShift(uint8_t byte) {
-
     if (rbuffer[1] == 0) {
         epdSelect();
         epdSend(byte);
@@ -772,12 +668,9 @@ void epdPrintBegin(uint16_t x, uint16_t y, bool direction, bool fontsize, bool c
         // setWindowY(y, 1);
         if (epdCharSize == 2) {
             setWindowXY(x, x + 32 + extra, SCREEN_HEIGHT - y, SCREEN_HEIGHT);
-            // setPosXY(x, y);
         } else {
             setWindowXY(x, x + 16 + extra, SCREEN_HEIGHT - y, SCREEN_HEIGHT);
-            // setPosXY(x, y);
         }
-        // shortCommand1(CMD_DATA_ENTRY_MODE, 1);  // was 3
     } else {
         if (epdCharSize == 2) {
             x /= 2;
@@ -786,10 +679,7 @@ void epdPrintBegin(uint16_t x, uint16_t y, bool direction, bool fontsize, bool c
         } else {
             setWindowXY(x, SCREEN_WIDTH, y, y + 16);
         }
-        // setPosXY(x, y);
         fontCurXpos = x;
-        // setWindowXY(x, SCREEN_WIDTH);
-        //  shortCommand1(CMD_DATA_ENTRY_MODE, 7);
         memset(rbuffer, 0, 32);
     }
 

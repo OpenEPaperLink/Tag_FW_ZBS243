@@ -22,10 +22,14 @@
 	#define SCREEN_WIDTH 152
 	#define SCREEN_HEIGHT 152
 	#define CUSTOMLUTS
+	#define ALT_DRAW_COMMAND
 
 	#define EEPROM_IMG_EACH                         (0x02000UL)
 
 	#define HW_TYPE                                 SOLUM_154_SSD1619
+	#define HW_SUBTYPE									0
+	#define HW_STRING "16SSDVAR_152BWR"
+
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -39,10 +43,13 @@
 	#define SCREEN_WIDTH 152
 	#define SCREEN_HEIGHT 152
 	#define CUSTOMLUTS
+	#define ALT_DRAW_COMMAND
 	#define XOFFSET8
 	#define EEPROM_IMG_EACH                         (0x02000UL)
 
 	#define HW_TYPE                                 SOLUM_154_SSD1619
+	#define HW_SUBTYPE									1
+	#define HW_STRING "16SSDVAR2_152BWR"
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -60,6 +67,9 @@
 	#define EEPROM_IMG_EACH                         (0x02000UL)
 
 	#define HW_TYPE                                 SOLUM_M2_BW_16
+	#define HW_SUBTYPE									0
+	#define HW_STRING "16SSDVAR_200BW"
+
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -77,6 +87,9 @@
 	#define EEPROM_IMG_EACH                         (0x02000UL)
 
 	#define HW_TYPE					        		SOLUM_M2_BWR_22
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_22_SSDVAR_BWR"
+
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -93,6 +106,8 @@
 	#define EEPROM_IMG_EACH                         (0x03000UL)
 
 	#define HW_TYPE					        		SOLUM_M2_BWR_26
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_26_SSDVAR_BWR"
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -110,6 +125,8 @@
 	#define EEPROM_IMG_EACH                         (0x03000UL)
 
 	#define HW_TYPE					        		SOLUM_M2_BWR_27
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_27_UCVAR_BWR"
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -125,10 +142,13 @@
 	#define SCREEN_WIDTH 128
 	#define SCREEN_HEIGHT 296
 	#define CUSTOMLUTS
+	#define ALT_DRAW_COMMAND
 
 	#define EEPROM_IMG_EACH                         (0x03000UL)
 
 	#define HW_TYPE                                 SOLUM_29_SSD1619
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_29_SSDVAR_BWR"
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -143,10 +163,13 @@
 	#define SCREEN_HEIGHT 296
 	#define CUSTOMLUTS
 	#define XOFFSET8
+	#define ALT_DRAW_COMMAND
 
 	#define EEPROM_IMG_EACH                         (0x03000UL)
 
 	#define HW_TYPE                                 SOLUM_29_SSD1619
+	#define HW_SUBTYPE									1
+	#define HW_STRING "M2_ZBS_29_SSDVAR2_BWR"
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -164,6 +187,8 @@
 	#define EEPROM_IMG_EACH                         (0x03000UL)
 
 	#define HW_TYPE                                 SOLUM_M2_BWR_29_UC8151
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_29_UCVAR_BWR"
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -180,6 +205,9 @@
 	#define EEPROM_IMG_EACH                         (0x03000UL)
 
 	#define HW_TYPE                                 SOLUM_M2_BW_29
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_29_UCVAR_BW"
+
 	#define BW_SCREEN
 
 	#define HAS_EEPROM 1
@@ -202,6 +230,9 @@
 	#define EEPROM_IMG_EACH                         (0x03000UL)
 
 	#define HW_TYPE                                 SOLUM_M2_BW_29_LOWTEMP
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_29_SSDVAR_BW_FREEZER"
+
 
 	#define HAS_EEPROM 1
 	#define HAS_SCREEN 1
@@ -224,6 +255,10 @@
 	#define NFC_TYPE 2
 
 	#define HW_TYPE					        		SOLUM_42_SSD1619
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_42_SSDVAR_BWR"
+
+
 #endif
 
 #ifdef M2_ZBS_42_UCVAR_BWR
@@ -240,6 +275,8 @@
 	#define NFC_TYPE 2
 
 	#define HW_TYPE									SOLUM_42_UCVAR	
+	#define HW_SUBTYPE									0
+	#define HW_STRING "M2_ZBS_42_UCVAR_BWR"
 #endif
 
 

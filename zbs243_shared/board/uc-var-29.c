@@ -1,11 +1,11 @@
 #include "uc-var-29.h"
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <string.h>
 
 #include "asmUtil.h"
 #include "barcode.h"
-#include "tagtype.h"
 #include "cpu.h"
 #include "font.h"
 #include "lut.h"
@@ -13,6 +13,7 @@
 #include "settings.h"
 #include "sleep.h"
 #include "spi.h"
+#include "tagtype.h"
 #include "timer.h"
 #include "wdt.h"
 
@@ -181,6 +182,8 @@ enum PLL_FLAGS {
         P2_2 = 1;  \
     } while (0)
 
+#define EPD_RESET_MAX 220
+
 extern void dump(uint8_t* __xdata a, uint16_t __xdata l);  // remove me when done
 
 static uint8_t __xdata epdCharSize = 1;   // character size, 1 or 2 (doubled)
@@ -226,86 +229,8 @@ static void epdBusySleep(uint32_t timeout) {
     P2LVLSEL = tmp_P2LVLSEL;
     eepromPrvDeselect();
 }
-static void epdBusyWait(uint32_t timeout) {
-    uint32_t __xdata start = timerGet();
+#include "inc_epd_lowlevel.c"
 
-    while (timerGet() - start < timeout) {
-        if (P2_1)
-            return;
-    }
-    #ifdef DEBUGEPD
-    pr("screen timeout %lu ticks :(\n", timerGet() - start);
-    #endif
-    while (1)
-        ;
-}
-static void commandReadBegin(uint8_t cmd) {
-    epdSelect();
-    markCommand();
-    spiByte(cmd);  // dump LUT
-
-    P0DIR = (P0DIR & ~(1 << 0)) | (1 << 1);
-    P0 &= ~(1 << 0);
-    P0FUNC &= ~((1 << 0) | (1 << 1));
-    P2_2 = 1;
-}
-static void commandReadEnd() {
-    // set up pins for spi (0.0,0.1,0.2)
-    P0FUNC |= (1 << 0) | (1 << 1);
-    epdDeselect();
-}
-#pragma callee_saves epdReadByte
-static uint8_t epdReadByte() {
-    uint8_t val = 0, i;
-
-    for (i = 0; i < 8; i++) {
-        P0_0 = 1;
-        __asm__("nop\nnop\nnop\nnop\nnop\nnop\n");
-        val <<= 1;
-        if (P0_1)
-            val++;
-        P0_0 = 0;
-        __asm__("nop\nnop\nnop\nnop\nnop\nnop\n");
-    }
-
-    return val;
-}
-static void shortCommand(uint8_t cmd) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    epdDeselect();
-}
-static void shortCommand1(uint8_t cmd, uint8_t arg) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    markData();
-    spiTXByte(arg);
-    epdDeselect();
-}
-static void shortCommand2(uint8_t cmd, uint8_t arg1, uint8_t arg2) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    markData();
-    spiTXByte(arg1);
-    spiTXByte(arg2);
-    epdDeselect();
-}
-static void commandBegin(uint8_t cmd) {
-    epdSelect();
-    markCommand();
-    spiTXByte(cmd);
-    markData();
-}
-static void epdReset() {
-    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
-    P2_0 = 0;
-    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
-    P2_0 = 1;
-    timerDelay(TIMER_TICKS_PER_SECOND / 1000);
-}
 void epdConfigGPIO(bool setup) {
     // data / _command: 2.2
     // busy             2.1
@@ -335,11 +260,9 @@ void epdEnterSleep() {
     timerDelay(20 * TIMER_TICKS_PER_MS);
     epdReset();
     timerDelay(20 * TIMER_TICKS_PER_MS);
-    shortCommand1(CMD_VCOM_INTERVAL, 0x17);
-    shortCommand1(CMD_VCOM_DC_SETTING, 0x00);
-    // shortCommand(CMD_POWER_OFF);
-    //  epdWaitRdy();
-    shortCommand1(CMD_DEEP_SLEEP, 0xA5);
+    epdWrite(CMD_VCOM_INTERVAL, 1, 0x17);
+    epdWrite(CMD_VCOM_DC_SETTING, 1, 0x00);
+    epdWrite(CMD_DEEP_SLEEP, 1, 0xA5);
     isInited = false;
 }
 
@@ -354,7 +277,7 @@ static void epdDrawDirection(bool direction) {
     } else {
         psr_setting |= SCAN_UP;
     }
-    shortCommand1(CMD_PANEL_SETTING, psr_setting);
+    epdWrite(CMD_PANEL_SETTING, 1, psr_setting);
 #else
     uint8_t psr_setting = RES_128x296 | FORMAT_BW | BOOSTER_ON | RESET_NONE | LUT_OTP | SHIFT_RIGHT;
     if (drawDirection) {
@@ -362,9 +285,8 @@ static void epdDrawDirection(bool direction) {
     } else {
         psr_setting |= SCAN_UP;
     }
-    shortCommand2(CMD_PANEL_SETTING, psr_setting, 0b00001011);
+    epdWrite(CMD_PANEL_SETTING, 2, psr_setting, 0b00001011);
 #endif
-
 }
 
 void epdSetup() {
@@ -373,47 +295,42 @@ void epdSetup() {
     drawDirection = false;
     epdDrawDirection(true);
 #ifndef BW_SCREEN
-    commandBegin(CMD_POWER_SETTING);
-    epdSend(VDS_INTERNAL | VDG_INTERNAL);
-    epdSend(VCOM_VD | VGHL_16V);
-    epdSend(0b101011);
-    epdSend(0b101011);
-    epdSend(0b101011);
-    commandEnd();
+    epdWrite(CMD_POWER_SETTING, 5,
+             (VDS_INTERNAL | VDG_INTERNAL),
+             (VCOM_VD | VGHL_16V),
+             (0b101011),
+             (0b101011),
+             (0b101011));
 #else
-    commandBegin(CMD_POWER_SETTING);
-    epdSend(VDS_INTERNAL | VDG_INTERNAL);
-    epdSend(VCOM_VD | VGHL_15V);
-    commandEnd();
+    epdWrite(CMD_POWER_SETTING, 2,
+             (VDS_INTERNAL | VDG_INTERNAL),
+             (VCOM_VD | VGHL_15V));
 #endif
 
+    epdWrite(CMD_BOOSTER_SOFT_START, 3,
+             (START_10MS | STRENGTH_3 | OFF_6_58US),
+             (START_10MS | STRENGTH_3 | OFF_6_58US),
+             (START_10MS | STRENGTH_3 | OFF_6_58US));
 
-    commandBegin(CMD_BOOSTER_SOFT_START);
-    epdSend(START_10MS | STRENGTH_3 | OFF_6_58US);
-    epdSend(START_10MS | STRENGTH_3 | OFF_6_58US);
-    epdSend(START_10MS | STRENGTH_3 | OFF_6_58US);
-    commandEnd();
-
-    shortCommand(CMD_POWER_ON);
+    epdWrite(CMD_POWER_ON, 0);
     epdWaitRdy();
-    
-  
-    commandBegin(CMD_RESOLUTION_SETING);
-    epdSend(SCREEN_WIDTH);
-    epdSend(SCREEN_HEIGHT >> 8);
-    epdSend(SCREEN_HEIGHT & 0xFF);
-    commandEnd();
-    shortCommand1(CMD_POWER_OFF_SEQUENCE, FRAMES_1);
-    shortCommand1(CMD_TEMPERATURE_SELECT, TEMP_INTERNAL | OFFSET_0);
-    shortCommand1(CMD_TCON_SETTING, 0x22);
+
+    epdWrite(CMD_RESOLUTION_SETING, 3,
+             (SCREEN_WIDTH),
+             (SCREEN_HEIGHT >> 8),
+             (SCREEN_HEIGHT & 0xFF));
+
+    epdWrite(CMD_POWER_OFF_SEQUENCE, 1, FRAMES_1);
+    epdWrite(CMD_TEMPERATURE_SELECT, 1, TEMP_INTERNAL | OFFSET_0);
+    epdWrite(CMD_TCON_SETTING, 1, 0x22);
 #ifndef BW_SCREEN
-    shortCommand1(CMD_VCOM_INTERVAL, 0x8d);  // 0x87
+    epdWrite(CMD_VCOM_INTERVAL, 1, 0x8d);  // 0x87
 #else
-    shortCommand1(CMD_VCOM_INTERVAL, 0x4d);  // 0x87
+    epdWrite(CMD_VCOM_INTERVAL, 1, 0x4d);  // 0x87
 #endif
-    shortCommand1(CMD_PLL_CONTROL, HZ_200);
+    epdWrite(CMD_PLL_CONTROL, 1, HZ_200);
     epdWaitRdy();
-    shortCommand(CMD_POWER_ON);
+    epdWrite(CMD_POWER_ON, 0);
     epdWaitRdy();
 }
 static uint8_t epdGetStatus() {
@@ -432,7 +349,6 @@ uint16_t epdGetBattery(void) {
     return 2100;
 }
 
-
 void selectLUT(uint8_t lut) {
     // implement alternative LUTs here. Currently just reset the watchdog to two minutes,
     // to ensure it doesn't reset during the much longer bootup procedure
@@ -443,8 +359,9 @@ void selectLUT(uint8_t lut) {
 }
 
 void setWindowXY(uint16_t xstart, uint16_t xend, uint16_t ystart, uint16_t yend) {
-    shortCommand(CMD_PARTIAL_IN);
-    commandBegin(CMD_PARTIAL_WINDOW);
+    epdWrite(CMD_PARTIAL_IN, 0);
+    epdWrite(CMD_PARTIAL_WINDOW, 0);
+    epdSelect();
     epdSend((xstart / 8) << 3);
     epdSend(((xend / 8 - 1) << 3) | 0x07);
     epdSend(ystart >> 8);
@@ -452,7 +369,7 @@ void setWindowXY(uint16_t xstart, uint16_t xend, uint16_t ystart, uint16_t yend)
     epdSend((yend - 1) >> 8);
     epdSend((yend - 1) & 0xff);
     epdSend(0x01);
-    commandEnd();
+    epdDeselect();
 }
 
 void setColorMode(uint8_t red, uint8_t bw) {
@@ -462,28 +379,30 @@ void setColorMode(uint8_t red, uint8_t bw) {
     return;
 }
 void clearScreen() {
-    shortCommand(CMD_PARTIAL_OUT);
-    commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM2);
+    epdWrite(CMD_PARTIAL_OUT, 0);
+    epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM2, 0);
+    epdSelect();
     for (uint16_t c = 0; c < ((1UL * SCREEN_HEIGHT * SCREEN_WIDTH) / 8); c++) {
         epdSend(0x00);
     }
-    commandEnd();
+    epdDeselect();
     epdWaitRdy();
-    commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM1);
+    epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM1, 0);
+    epdSelect();
     for (uint16_t c = 0; c < ((1UL * SCREEN_HEIGHT * SCREEN_WIDTH) / 8); c++) {
         epdSend(0x00);
     }
-    commandEnd();
+    epdDeselect();
 }
 void draw() {
-    shortCommand(CMD_DISPLAY_REFRESH);
+    drawNoWait();
     epdWaitRdy();
 }
 void drawNoWait() {
-    shortCommand(CMD_DISPLAY_REFRESH);
+    epdWrite(CMD_DISPLAY_REFRESH, 0);
 }
 void drawWithSleep() {
-    shortCommand(CMD_DISPLAY_REFRESH);
+    drawNoWait();
     uint8_t tmp_P2FUNC = P2FUNC;
     uint8_t tmp_P2DIR = P2DIR;
     uint8_t tmp_P2PULL = P2PULL;
@@ -496,7 +415,7 @@ void drawWithSleep() {
     P2CHSTA &= 0xfd;
     P2INTEN = 2;
     P2CHSTA &= 0xfd;
-    sleepForMsec(TIMER_TICKS_PER_SECOND * 120);
+    sleepForMsec(TIMER_TICKS_PER_SECOND * 50);
     wdtOn();
     P2CHSTA &= 0xfd;
     P2INTEN &= 0xfd;
@@ -508,37 +427,31 @@ void drawWithSleep() {
     eepromPrvDeselect();
 }
 void epdWaitRdy() {
-    epdBusyWait(TIMER_TICKS_PER_SECOND * 120);
+    epdBusyWait(TIMER_TICKS_PER_SECOND * 50);
 }
 void beginFullscreenImage() {
-    shortCommand(CMD_PARTIAL_OUT);
+    epdWrite(CMD_PARTIAL_OUT, 0);
     epdDrawDirection(false);
-    // shortCommand1(CMD_DATA_ENTRY_MODE, 3);
-    // setPosXY(0, 0);
 }
 void beginWriteFramebuffer(bool color) {
-
     if (color == EPD_COLOR_RED) {
-        commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM2);
+        epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM2, 0);
     } else {
-        commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM1);
+        epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM1, 0);
     }
-    epdDeselect();
 }
 void endWriteFramebuffer() {
-    commandEnd();
+    epdDeselect();
 }
 
 void loadRawBitmap(uint8_t* bmp, uint16_t x, uint16_t y, bool color) __reentrant {
-   // this function is very badly hurt by the switch to UC8151, taking up LOTS of valuable idata space. Only defining variables
+    // this function is very badly hurt by the switch to UC8151, taking up LOTS of valuable idata space. Only defining variables
     // as static, or the function as reentrant (relegating variables to the stack) seemed to fix the idata issue. Fix me, or put me out of my misery...
 
     uint16_t xsize = bmp[0] / 8;
     if (bmp[0] % 8) xsize++;
     uint16_t ysize = bmp[1];
     uint16_t size = xsize * bmp[1];
-
-    //shortCommand1(CMD_DATA_ENTRY_MODE, 3);
 
     bmp += 2;
 
@@ -554,21 +467,23 @@ void loadRawBitmap(uint8_t* bmp, uint16_t x, uint16_t y, bool color) __reentrant
             }
             curY++;
             if (color) {
-                commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM2);
-         } else {
-                commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM1);
+                epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM2, 0);
+            } else {
+                epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM1, 0);
             }
         }
+        epdSelect();
         epdSend(*(bmp++));
         c++;
         if (!size--) break;
     }
-    commandEnd();
-    shortCommand(CMD_PARTIAL_OUT);
+    epdDeselect();
+    epdWrite(CMD_PARTIAL_OUT, 0);
 }
 void printBarcode(const uint8_t* string, uint16_t x, uint16_t y) {
     setWindowXY(x, x + 8, SCREEN_HEIGHT - y, SCREEN_HEIGHT);
-    commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM1);
+    epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM1, 0);
+    epdSelect();
     struct BarcodeInfo __xdata bci = {
         .str = string,
     };
@@ -579,8 +494,8 @@ void printBarcode(const uint8_t* string, uint16_t x, uint16_t y) {
             epdSend(0x00);
         }
     }
-    commandEnd();
-    shortCommand(CMD_PARTIAL_OUT);
+    epdDeselect();
+    epdWrite(CMD_PARTIAL_OUT, 0);
 }
 // stuff for printing text
 static void pushXFontBytesToEPD(uint8_t byte1, uint8_t byte2) {
@@ -667,7 +582,7 @@ static void pushYFontBytesToEPD(uint8_t byte1, uint8_t byte2) {
     }
 }
 void writeCharEPD(uint8_t c) {
-    c-=0x20;
+    c -= 0x20;
     // Writes a single character to the framebuffer
     bool empty = true;
     for (uint8_t i = 0; i < 20; i++) {
@@ -736,7 +651,6 @@ void epdPrintBegin(uint16_t x, uint16_t y, bool direction, bool fontsize, bool c
             setWindowXY(x, x + 16 + extra, SCREEN_HEIGHT - y, SCREEN_HEIGHT);
             // setPosXY(x, y);
         }
-        // shortCommand1(CMD_DATA_ENTRY_MODE, 1);  // was 3
     } else {
         if (epdCharSize == 2) {
             x /= 2;
@@ -745,17 +659,15 @@ void epdPrintBegin(uint16_t x, uint16_t y, bool direction, bool fontsize, bool c
         } else {
             setWindowXY(x, SCREEN_WIDTH, y, y + 16);
         }
-        // setPosXY(x, y);
         fontCurXpos = x;
-        // setWindowXY(x, SCREEN_WIDTH);
-        //  shortCommand1(CMD_DATA_ENTRY_MODE, 7);
         memset(rbuffer, 0, 32);
     }
     if (color) {
-        commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM2);
+        epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM2, 0);
     } else {
-        commandBegin(CMD_DISPLAY_START_TRANSMISSION_DTM1);
+        epdWrite(CMD_DISPLAY_START_TRANSMISSION_DTM1, 0);
     }
+    epdSelect();
 }
 void epdPrintEnd() {
     if (!directionY && ((fontCurXpos % 8) != 0)) {
@@ -763,7 +675,7 @@ void epdPrintEnd() {
             epdSend(rbuffer[i]);
         }
     }
-    commandEnd();
-    shortCommand(CMD_PARTIAL_OUT);
+    epdDeselect();
+    epdWrite(CMD_PARTIAL_OUT, 0);
     epdDrawDirection(true);
 }

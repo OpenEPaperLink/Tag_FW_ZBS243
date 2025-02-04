@@ -58,7 +58,7 @@ void timerInit(void)
 	IEN_TMR0 = 1;
 }
 
-void timerDelay(uint32_t ticks)
+void timerDelay(uint32_t ticks)__reentrant
 {
 	uint32_t start = timerGet();
 	while (timerGet() - start <= ticks);

@@ -66,7 +66,7 @@ __xdata bool fastNextCheckin = false;
 // other stuff we shouldn't have to put here...
 static __xdata uint32_t markerValid = EEPROM_IMG_VALID;
 
-extern void executeCommand(uint8_t cmd);  // this is defined in main.c
+extern void executeCommand(__xdata struct AvailDataInfo *avail);  // this is defined in main.c
 
 // tools
 static __xdata uint8_t getPacketType(const __xdata void *buffer) {
@@ -337,6 +337,7 @@ static void processBlockPart(const __xdata struct blockPart *bp, __xdata uint8_t
         xMemCopy((void *)(blockbuffer + start), (const void *)bp->data, size);
         // we don't need this block anymore, set bit to 0 so we don't request it again
         curBlock.requestedParts[bp->blockPart / 8] &= ~(1 << (bp->blockPart % 8));
+    } else {
     }
 }
 static void blockRxLoop(const uint32_t timeout, __xdata uint8_t *blockbuffer) {
@@ -804,9 +805,9 @@ __xdata uint8_t *getDataBlock(const uint16_t blockSize) {
 
         if (ack->pleaseWaitMs) {  // SLEEP - until the AP is ready with the data
             if (ack->pleaseWaitMs < 35) {
-                timerDelay(ack->pleaseWaitMs * TIMER_TICKS_PER_MS);
+                timerDelay((ack->pleaseWaitMs -5)* TIMER_TICKS_PER_MS);
             } else {
-                doSleep(ack->pleaseWaitMs - 15);
+                doSleep(ack->pleaseWaitMs - 25);
                 powerUp(INIT_UART | INIT_RADIO);
                 radioRxEnable(true, true);
             }
@@ -1279,7 +1280,7 @@ bool processAvailDataInfo(__xdata struct AvailDataInfo *avail) __reentrant {
             powerUp(INIT_RADIO);
             sendXferComplete();
             powerDown(INIT_RADIO);
-            executeCommand(avail->dataTypeArgument);
+            executeCommand(avail);
             return true;
             break;
     }
@@ -1287,6 +1288,9 @@ bool processAvailDataInfo(__xdata struct AvailDataInfo *avail) __reentrant {
 }
 
 bool validateMD5(uint32_t addr, uint16_t len) __reentrant {
+    #ifdef DEBUGMD5
+    uint32_t start = timerGet();
+    #endif
     md5Init();
     __xdata uint8_t *blockbuffer = malloc(256);
     while (len) {
@@ -1301,6 +1305,9 @@ bool validateMD5(uint32_t addr, uint16_t len) __reentrant {
         }
     }
     md5Finalize();
+    #ifdef DEBUGMD5
+    pr("MD5: took %lu ms\n", (timerGet() - start)/TIMER_TICKS_PER_MS);
+    #endif
     free(blockbuffer);
     if (xMemEqual((const __xdata void *)ctxdigest, (const __xdata void *)&xferDataInfo.dataVer, 8)) {
 #ifdef DEBUGPROTO

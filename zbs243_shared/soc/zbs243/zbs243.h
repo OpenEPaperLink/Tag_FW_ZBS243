@@ -18,6 +18,8 @@ static __idata __at (0x06) unsigned char R6;
 static __idata __at (0x07) unsigned char R7;
 __sfr __at (0xf0) B;
 __sfr __at (0xe0) ACC;
+
+__sfr __at (0x81) SP;
 __sfr __at (0x82) DPL;
 __sfr __at (0x83) DPH;
 __sfr __at (0x84) DPL1;

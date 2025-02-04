@@ -51,29 +51,19 @@ void setColorMode(uint8_t red, uint8_t bw);
 void fillWindowWithPattern(bool color);
 void clearWindow(bool color);
 void clearScreen();
-void draw();
 void drawNoWait();
 void drawWithSleep();
 void epdWaitRdy();
-void drawLineHorizontal(bool color, uint16_t x1, uint16_t x2, uint16_t y);
-void drawLineVertical(bool color, uint16_t x, uint16_t y1, uint16_t y2);
 void beginFullscreenImage();
 void beginWriteFramebuffer(bool color);
 void endWriteFramebuffer();
-void loadRawBitmap(uint8_t* bmp, uint16_t x, uint16_t y, bool color);
+void loadRawBitmap(uint8_t* bmp, uint16_t x, uint16_t y, bool color) __reentrant;
 void printBarcode(const uint8_t* string, uint16_t x, uint16_t y);
 
 void selectLUT(uint8_t lut);
 
-void ByteDecode(uint8_t byte);
-
-void epdPrintBegin(uint16_t x, uint16_t y, bool direction, bool fontsize, bool red);
+void epdPrintBegin(uint16_t x, uint16_t y, bool direction, bool fontsize, bool red) __reentrant;
 void epdPrintEnd();
-
-void beginFullscreenImage();
-void beginWriteFramebuffer(bool color);
-
-void lutTest();
 
 // for printf.c
 void writeCharEPD(uint8_t c);

@@ -38,7 +38,7 @@
     #define FWMAGICOFFSET 0x008b
 #endif
 
-static const uint64_t __code __at(FWMAGICOFFSET) firmwaremagic = (0xdeadd0d0beefcafeull) + HW_TYPE;
+static const uint64_t __code __at(FWMAGICOFFSET) firmwaremagic = (0xdeadd0d0beefcafeull) + HW_TYPE + (256UL * HW_SUBTYPE);
 
 #define TAG_MODE_CHANSEARCH 0
 #define TAG_MODE_ASSOCIATED 1
@@ -47,6 +47,7 @@ uint8_t currentTagMode = TAG_MODE_CHANSEARCH;
 
 __xdata uint8_t slideShowCurrentImg = 0;
 __xdata uint8_t slideShowRefreshCount = 1;
+
 
 #define HEAP_SIZE 5120
 // This firmware requires a rather large heap. This overrides SDCC's built-in heap size (1024)
@@ -114,21 +115,25 @@ void displayLoop() {
 
 #endif
 
+void writeMacToInfoPage(__xdata uint8_t *mac) {
+    __xdata uint8_t *ipage = (__xdata uint8_t *)malloc(1024);
+    flashRead(FLASH_INFOPAGE_ADDR, (void *)ipage, 1024);
+    flashErase(FLASH_INFOPAGE_ADDR + 1);
+    memcpy((void *)(ipage + 0x0010), (void *)mac, 8);
+    flashWrite(FLASH_INFOPAGE_ADDR, (void *)ipage, 1024, false);
+    free(ipage);
+}
+
 void writeRandomMac() {
     for (__xdata uint8_t c = 0; c < 8; c++) {
         mSelfMac[c] = rndGen8();
     }
-    __xdata uint8_t *temp = (__xdata uint8_t *)malloc(1024);
-    memcpy((__xdata void *)(temp + 0x0010), (__xdata void *)mSelfMac, 8);
-    flashErase(FLASH_INFOPAGE_ADDR + 1);
-    flashWrite(FLASH_INFOPAGE_ADDR, (void *)temp, 1024, false);
-    free(temp);
+    writeMacToInfoPage(mSelfMac);
 }
 
 #ifdef WRITE_MAC_FROM_FLASH
-void writeInfoPageWithMac() {
-    uint8_t *settemp = blockbuffer + 2048;
-    flashRead(FLASH_INFOPAGE_ADDR, (void *)blockbuffer, 1024);
+void writeMacFromFlash() {
+    __xdata uint8_t *settemp = (__xdata uint8_t *)malloc(16);
     flashRead(0xFC06, (void *)(settemp + 8), 4);
     settemp[7] = 0x00;
     settemp[6] = 0x00;
@@ -168,10 +173,9 @@ void writeInfoPageWithMac() {
     }
     settemp[0] += cksum & 0x0F;
 
-    memcpy((void *)(blockbuffer + 0x0010), (void *)settemp, 8);
-
-    flashErase(FLASH_INFOPAGE_ADDR + 1);
-    flashWrite(FLASH_INFOPAGE_ADDR, (void *)blockbuffer, 1024, false);
+    writeMacToInfoPage(settemp);
+    // write to infopage
+    free(settemp);
 }
 #endif
 
@@ -244,6 +248,41 @@ void checkI2C() {
         // didn't find a NFC chip on the expected ID
         powerDown(INIT_I2C);
     }
+}
+#endif
+
+#ifdef DEBUGSTACK
+void stackFill() __reentrant {
+    pr("Stack available: %u\n", 2 + (255 - SP));
+    for (uint8_t c = SP + 1; c != 0; c++) {
+        __idata uint8_t *t = NULL;
+        t += c;
+        if (c % 2) {
+            *t = 0xAB;
+        } else {
+            *t = 0xBA;
+        }
+    }
+}
+
+void getHighWater() __reentrant {
+    uint8_t high = 0;
+    for (uint8_t c = 255; c > SP; c--) {
+        __idata uint8_t *t = NULL;
+        t += c;
+        if (c % 2) {
+            if (*t != 0xAB) {
+                high = c;
+                break;
+            }
+        } else {
+            if (*t != 0xBA) {
+                high = c;
+                break;
+            }
+        }
+    }
+    pr("Stack headroom: %u bytes\n", 255 - high);
 }
 #endif
 
@@ -551,7 +590,8 @@ void TagShowWaitRFWake() {
 }
 #endif
 
-void executeCommand(uint8_t cmd) {
+void executeCommand(__xdata struct AvailDataInfo *avail) {
+    uint8_t __xdata cmd = avail->dataTypeArgument;
     switch (cmd) {
         case CMD_DO_REBOOT:
             wdtDeviceReset();
@@ -566,11 +606,23 @@ void executeCommand(uint8_t cmd) {
             currentChannel = channelSelect(4);
             break;
         case CMD_DO_DEEPSLEEP:
-            powerUp(INIT_EPD);
-            afterFlashScreenSaver();
-            powerDown(INIT_EPD | INIT_UART);
             while (1) {
-                doSleep(-1);
+                wdt120s();
+                powerUp(INIT_EPD);
+                showLongTermSleep();
+                powerDown(INIT_EPD | INIT_UART);
+                wdt30s();
+                doSleep(259200000UL);
+            }
+            break;
+        case CMD_ENTER_AFTER_FLASH:
+            while (1) {
+                wdt120s();
+                powerUp(INIT_EPD);
+                afterFlashScreenSaver();
+                powerDown(INIT_EPD | INIT_UART);
+                wdt30s();
+                doSleep(259200000UL);
             }
             break;
         case CMD_ERASE_EEPROM_IMAGES:
@@ -641,6 +693,10 @@ void executeCommand(uint8_t cmd) {
             powerDown(INIT_EEPROM);
             wdtDeviceReset();
             break;
+        case CMD_SET_MAC:
+            writeMacToInfoPage((__xdata uint8_t *)&avail->dataVer);
+            wdtDeviceReset();
+            break;
 #endif
     }
 }
@@ -694,19 +750,19 @@ void main() {
 #ifdef DEBUGMEMLEAKS
     MemTest51();
 #endif
-
+#ifdef DEBUGSTACK
+    stackFill();
+#endif
     // load settings from infopage
     loadSettings();
     // invalidate the settings, and write them back in a later state
     invalidateSettingsEEPROM();
 
-
-
 #ifdef WRITE_MAC_FROM_FLASH
     if (mSelfMac[7] == 0xFF && mSelfMac[6] == 0xFF) {
         wdt10s();
         timerDelay(TIMER_TICKS_PER_SECOND * 2);
-        writeInfoPageWithMac();
+        writeMacFromFlash();
         for (uint16_t c = 0xE800; c != 0; c += 1024) {
             flashErase(c);
         }
@@ -815,7 +871,6 @@ void main() {
         writeSettings();
         powerDown(INIT_EEPROM);
 
-
         initPowerSaving(INTERVAL_BASE);
         currentTagMode = TAG_MODE_ASSOCIATED;
         doSleep(5000UL);
@@ -841,7 +896,9 @@ void main() {
 #ifdef DEBUGMEMLEAKS
         MemTest51();
 #endif
-
+#ifdef DEBUGSTACK
+        getHighWater();
+#endif
         wdt10s();
         switch (currentTagMode) {
             case TAG_MODE_ASSOCIATED:
